@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Horror Maze</title>
+
+<style>
+body {
+    margin: 0;
+    overflow: hidden;
+    background: black;
+    font-family: Arial;
+}
+
+#info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    z-index: 100;
+}
+
+#gameOver {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    color: red;
+    font-size: 60px;
+    background: rgba(0,0,0,0.8);
+    z-index: 200;
+}
+</style>
+</head>
+
+<body>
+
+<div id="info">
+WASD = Move<br>
+Mouse = Look Around<br>
+Escape the maze!
+</div>
+
+<div id="gameOver">YOU DIED</div>
+
+<script type="module">
+
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
+import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/controls/PointerLockControls.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+scene.fog = new THREE.Fog(0x000000, 5, 40);
+
+const camera = new THREE.PerspectiveCamera(
+75,
+window.innerWidth/window.innerHeight,
+0.1,
+1000
+);
+
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new PointerLockControls(camera, document.body);
+
+document.body.addEventListener("click", () => {
+    controls.lock();
+});
+
+scene.add(controls.getObject());
+
+camera.position.set(2,2,2);
+
+const light = new THREE.PointLight(0xff4444, 2, 50);
+light.position.set(0,10,0);
+scene.add(light);
+
+const ambient = new THREE.AmbientLight(0x222222);
+scene.add(ambient);
+
+const floorGeo = new THREE.PlaneGeometry(200,200);
+const floorMat = new THREE.MeshStandardMaterial({
+    color: 0x111111
+});
+
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI/2;
+scene.add(floor);
+
+const maze = [
+"111111111111111",
+"100000000000001",
+"101111011111101",
+"101000010000101",
+"101011110110101",
+"101000000010101",
+"101111111010101",
+"100000001010001",
+"111111101011101",
+"100000001000001",
+"101111111111101",
+"1000000000000E1",
+"111111111111111"
+];
+
+const walls = [];
+const wallSize = 4;
+
+const wallMat = new THREE.MeshStandardMaterial({
+    color: 0x333333
+});
+
+let exitPos = new THREE.Vector3();
+
+for(let z=0; z<maze.length; z++) {
+
+    for(let x=0; x<maze[z].length; x++) {
+
+        const tile = maze[z][x];
+
+        if(tile === "1") {
+
+            const wall = new THREE.Mesh(
+                new THREE.BoxGeometry(wallSize, wallSize, wallSize),
+                wallMat
+            );
+
+            wall.position.set(
+                x*wallSize,
+                wallSize/2,
+                z*wallSize
+            );
+
+            scene.add(wall);
+            walls.push(wall);
+        }
+
+        if(tile === "E") {
+
+            exitPos.set(
+                x*wallSize,
+                1,
+                z*wallSize
+            );
+
+            const exit = new THREE.Mesh(
+                new THREE.BoxGeometry(2,2,2),
+                new THREE.MeshStandardMaterial({
+                    color: 0x00ff00,
+                    emissive: 0x00ff00
+                })
+            );
+
+            exit.position.copy(exitPos);
+            scene.add(exit);
+        }
+    }
+}
+
+const monster = new THREE.Mesh(
+    new THREE.BoxGeometry(3,5,3),
+    new THREE.MeshStandardMaterial({
+        color: 0xaa0000,
+        emissive: 0x440000
+    })
+);
+
+monster.position.set(45,2,45);
+
+scene.add(monster);
+
+const keys = {};
+
+document.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+});
+
+document.addEventListener("keyup", e => {
+    keys[e.key.toLowerCase()] = false;
+});
+
+function collision(x,z) {
+
+    for(const wall of walls) {
+
+        if(
+            Math.abs(wall.position.x - x) < 2.5 &&
+            Math.abs(wall.position.z - z) < 2.5
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function movePlayer(delta) {
+
+    const speed = 10 * delta;
+
+    let mx = 0;
+    let mz = 0;
+
+    if(keys["w"]) mz -= speed;
+    if(keys["s"]) mz += speed;
+    if(keys["a"]) mx -= speed;
+    if(keys["d"]) mx += speed;
+
+    controls.moveRight(mx);
+    controls.moveForward(mz);
+
+    const p = controls.getObject().position;
+
+    if(collision(p.x,p.z)) {
+
+        controls.moveRight(-mx);
+        controls.moveForward(-mz);
+    }
+}
+
+function moveMonster(delta) {
+
+    const speed = 2 * delta;
+
+    const dx = camera.position.x - monster.position.x;
+    const dz = camera.position.z - monster.position.z;
+
+    const dist = Math.sqrt(dx*dx + dz*dz);
+
+    monster.position.x += (dx/dist) * speed;
+    monster.position.z += (dz/dist) * speed;
+
+    if(dist < 2) {
+        document.getElementById("gameOver").style.display = "flex";
+    }
+}
+
+function checkWin() {
+
+    if(camera.position.distanceTo(exitPos) < 3) {
+
+        const over = document.getElementById("gameOver");
+
+        over.style.display = "flex";
+        over.innerHTML = "YOU ESCAPED";
+        over.style.color = "lime";
+    }
+}
+
+const clock = new THREE.Clock();
+
+function animate() {
+
+    requestAnimationFrame(animate);
+
+    const delta = clock.getDelta();
+
+    movePlayer(delta);
+    moveMonster(delta);
+    checkWin();
+
+    light.position.copy(camera.position);
+
+    renderer.render(scene,camera);
+}
+
+animate();
+
+window.addEventListener("resize", () => {
+
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
+});
+
+</script>
+
+</body>
+</html>
