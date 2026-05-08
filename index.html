@@ -1,310 +1,69 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Garden Hose Quest</title>
-
-<style>
-body{
-    margin:0;
-    background:#1b1b1b;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100vh;
-    overflow:hidden;
-}
-canvas{
-    image-rendering: pixelated;
-    border:4px solid #222;
-    background:#4fa34f;
-}
-</style>
-</head>
-<body>
-
-<canvas id="game" width="960" height="640"></canvas>
-
-<script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
-const SIZE = 32;
-const W = canvas.width/SIZE;
-const H = canvas.height/SIZE;
-
-let level = 1;
-
-let hose = [
-    {x:2,y:2},
-    {x:1,y:2},
-    {x:0,y:2}
-];
-
-let dir = {x:1,y:0};
-
-let growFood;
-let rock;
-let obstacles=[];
-
-function rand(max){
-    return Math.floor(Math.random()*max);
-}
-
-function generateLevel(){
-
-    obstacles=[];
-
-    for(let i=0;i<level*8;i++){
-        obstacles.push({
-            x:rand(W-2)+1,
-            y:rand(H-2)+1
-        });
-    }
-
-    growFood={
-        x:rand(W-4)+2,
-        y:rand(H-4)+2
-    };
-
-    rock={
-        x:W-3,
-        y:H-3
-    };
-
-    hose = [
-        {x:2,y:2},
-        {x:1,y:2},
-        {x:0,y:2}
-    ];
-}
-
-function same(a,b){
-    return a.x===b.x && a.y===b.y;
-}
-
-function drawTile(x,y,color){
-    ctx.fillStyle=color;
-    ctx.fillRect(
-        x*SIZE,
-        y*SIZE,
-        SIZE,
-        SIZE
-    );
-}
-
-function drawHosePart(part,index){
-
-    if(index===0){
-
-        // hose head
-        drawTile(part.x,part.y,"#2f9cff");
-
-        ctx.fillStyle="white";
-
-        ctx.fillRect(
-            part.x*SIZE+20,
-            part.y*SIZE+8,
-            5,
-            5
-        );
-
-    }else{
-
-        drawTile(
-            part.x,
-            part.y,
-            "#35d65f"
-        );
-    }
-}
-
-function drawRock(){
-
-    let x = rock.x*SIZE;
-    let y = rock.y*SIZE;
-
-    ctx.fillStyle="#777";
-    ctx.beginPath();
-
-    ctx.arc(
-        x+16,
-        y+16,
-        14,
-        0,
-        Math.PI*2
-    );
-
-    ctx.fill();
-
-    // crack
-    ctx.strokeStyle="black";
-    ctx.lineWidth=2;
-
-    ctx.beginPath();
-    ctx.moveTo(x+16,y+6);
-    ctx.lineTo(x+12,y+16);
-    ctx.lineTo(x+20,y+26);
-    ctx.stroke();
-}
-
-function drawGrow(){
-
-    let x = growFood.x*SIZE;
-    let y = growFood.y*SIZE;
-
-    // hose roll
-    ctx.strokeStyle="#2f9cff";
-    ctx.lineWidth=4;
-
-    ctx.beginPath();
-    ctx.arc(
-        x+16,
-        y+16,
-        10,
-        0,
-        Math.PI*2
-    );
-
-    ctx.stroke();
-}
-
-function drawObstacle(o){
-
-    let x=o.x*SIZE;
-    let y=o.y*SIZE;
-
-    // crate
-    ctx.fillStyle="#9b5a24";
-
-    ctx.fillRect(
-        x+2,
-        y+2,
-        28,
-        28
-    );
-
-    ctx.strokeStyle="#6d3b15";
-
-    ctx.strokeRect(
-        x+2,
-        y+2,
-        28,
-        28
-    );
-}
-
-function move(){
-
-    let head = {
-        x:hose[0].x+dir.x,
-        y:hose[0].y+dir.y
-    };
-
-    if(
-        head.x<0 ||
-        head.y<0 ||
-        head.x>=W ||
-        head.y>=H
-    ){
-        generateLevel();
-        return;
-    }
-
-    for(let o of obstacles){
-        if(same(head,o)){
-            generateLevel();
-            return;
-        }
-    }
-
-    for(let part of hose){
-        if(same(head,part)){
-            generateLevel();
-            return;
-        }
-    }
-
-    hose.unshift(head);
-
-    if(same(head,growFood)){
-
-        growFood={
-            x:rand(W-4)+2,
-            y:rand(H-4)+2
-        };
-
-    }else{
-
-        hose.pop();
-    }
-
-    // win
-    if(
-        Math.abs(head.x-rock.x)<=1 &&
-        Math.abs(head.y-rock.y)<=1 &&
-        hose.length>=8
-    ){
-
-        level++;
-        alert(
-            "You filled the rock crack! Level "+level
-        );
-
-        generateLevel();
-    }
-}
-
-function draw(){
-
-    ctx.clearRect(
-        0,0,
-        canvas.width,
-        canvas.height
-    );
-
-    for(let o of obstacles){
-        drawObstacle(o);
-    }
-
-    drawGrow();
-
-    drawRock();
-
-    hose.forEach(drawHosePart);
-
-    ctx.fillStyle="white";
-    ctx.font="20px monospace";
-
-    ctx.fillText(
-        "LEVEL: "+level+
-        "  HOSE: "+hose.length,
-        10,
-        25
-    );
-}
-
-window.addEventListener(
-"keydown",
-e=>{
-
-    if(e.key==="ArrowUp") dir={x:0,y:-1};
-    if(e.key==="ArrowDown") dir={x:0,y:1};
-    if(e.key==="ArrowLeft") dir={x:-1,y:0};
-    if(e.key==="ArrowRight") dir={x:1,y:0};
-
-});
-
-generateLevel();
-
-setInterval(()=>{
-
-    move();
-    draw();
-
-},140);
-
-</script>
-
-</body>
-</html>
+import pygame
+import random
+
+# Initialize Pygame
+pygame.init()
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("8-Bit FNAF 4 Fan Game")
+clock = pygame.time.Clock()
+
+# Colors & Game States
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+rooms = ["BEDROOM", "LEFT_HALL", "RIGHT_HALL", "CLOSET"]
+current_room = "BEDROOM"
+
+# Monster Variables
+monster_pos = 0  # 0: Far, 5: At Door (Jumpscare)
+monster_timer = pygame.USEREVENT + 1
+pygame.time.set_timer(monster_timer, 5000) # Monster moves every 5 seconds
+
+running = True
+while running:
+    # 1. Input Handling
+    keys = pygame.key.get_pressed()
+    flashlight = keys[pygame.K_f]   # Flashlight (F)
+    door_held = keys[pygame.K_SPACE] # Close Door (Space)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        
+        # Room Navigation (WASD)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_a: current_room = "LEFT_HALL"
+            if event.key == pygame.K_d: current_room = "RIGHT_HALL"
+            if event.key == pygame.K_w: current_room = "CLOSET"
+            if event.key == pygame.K_s: current_room = "BEDROOM"
+
+        # Monster AI Logic
+        if event.type == monster_timer:
+            if not (current_room == "LEFT_HALL" and door_held):
+                monster_pos += 1
+            if monster_pos >= 5:
+                print("JUMPSCARE! Game Over.")
+                running = False
+
+    # 2. Rendering
+    screen.fill(BLACK)
+    
+    # Draw Background (Placeholder text for your 8-bit sprites)
+    font = pygame.font.SysFont("arial", 32)
+    room_text = font.render(f"Location: {current_room}", True, WHITE)
+    screen.blit(room_text, (20, 20))
+
+    if flashlight:
+        pygame.draw.circle(screen, (255, 255, 200), (WIDTH//2, HEIGHT//2), 200) # Light effect
+        if current_room == "LEFT_HALL" and monster_pos > 0:
+            # If monster is flashed in hall, it retreats
+            monster_pos = 0
+            print("Monster retreated!")
+
+    if door_held and (current_room == "LEFT_HALL" or current_room == "RIGHT_HALL"):
+        pygame.draw.rect(screen, (50, 50, 50), (100, 50, 600, 500)) # Door visual
+
+    pygame.display.flip()
+    clock.tick(60)
+
+pygame.quit()
