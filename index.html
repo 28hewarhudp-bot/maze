@@ -1,43 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>8-Bit Maze Monster Game</title>
+<title>Garden Hose Quest</title>
 
 <style>
 body{
     margin:0;
-    background:black;
-    color:white;
-    font-family:monospace;
+    background:#1b1b1b;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
     overflow:hidden;
-    text-align:center;
 }
-
-h1{
-    margin:10px;
-}
-
 canvas{
-    background:#111;
-    display:block;
-    margin:auto;
-    border:4px solid white;
     image-rendering: pixelated;
-}
-
-#info{
-    margin:10px;
-    font-size:20px;
+    border:4px solid #222;
+    background:#4fa34f;
 }
 </style>
 </head>
-
 <body>
-
-<h1>8-Bit Maze Monster</h1>
-<div id="info">Keys: <span id="keyCount">0</span>/5</div>
 
 <canvas id="game" width="960" height="640"></canvas>
 
@@ -45,250 +29,281 @@ canvas{
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-const TILE = 32;
+const SIZE = 32;
+const W = canvas.width/SIZE;
+const H = canvas.height/SIZE;
 
-const maze = [
-"##############################",
-"#............#...............#",
-"#.######.#######.##########..#",
-"#.#....#.....#...#........#..#",
-"#.#.##.#####.#.###.######.#..#",
-"#...##.....#.#.....#....#.#..#",
-"#####.#####.#.#####.#.##.#.#.#",
-"#.....#.....#.....#.#.##.#.#.#",
-"#.#####.#########.#.#....#.#.#",
-"#.#.....#.......#.#.######.#.#",
-"#.#.#####.#####.#.#........#.#",
-"#.#.....#.#...#.#.##########.#",
-"#.#.###.#.#.#.#.#............#",
-"#...#.#.#.#.#.#.############.#",
-"#####.#.#.#.#.#............#.#",
-"#.....#...#.#.############.#.#",
-"#.#########.#............#.#.#",
-"#...........############.#...#",
-"#............................#",
-"##############################"
+let level = 1;
+
+let hose = [
+    {x:2,y:2},
+    {x:1,y:2},
+    {x:0,y:2}
 ];
 
-const ROWS = maze.length;
-const COLS = maze[0].length;
+let dir = {x:1,y:0};
 
-function isWall(x, y){
-    return maze[y][x] === "#";
+let growFood;
+let rock;
+let obstacles=[];
+
+function rand(max){
+    return Math.floor(Math.random()*max);
 }
 
-const player = {
-    x:1,
-    y:1,
-    color:"#00ff00"
-};
+function generateLevel(){
 
-const monster = {
-    x:28,
-    y:18,
-    color:"#ff0000"
-};
+    obstacles=[];
 
-const keys = [
-    {x:5, y:5, found:false},
-    {x:10, y:15, found:false},
-    {x:18, y:2, found:false},
-    {x:24, y:10, found:false},
-    {x:27, y:17, found:false}
-];
-
-let collected = 0;
-let gameOver = false;
-let win = false;
-
-function drawMaze(){
-    for(let y=0; y<ROWS; y++){
-        for(let x=0; x<COLS; x++){
-
-            if(maze[y][x] === "#"){
-                ctx.fillStyle = "#4444ff";
-                ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
-            }
-        }
+    for(let i=0;i<level*8;i++){
+        obstacles.push({
+            x:rand(W-2)+1,
+            y:rand(H-2)+1
+        });
     }
+
+    growFood={
+        x:rand(W-4)+2,
+        y:rand(H-4)+2
+    };
+
+    rock={
+        x:W-3,
+        y:H-3
+    };
+
+    hose = [
+        {x:2,y:2},
+        {x:1,y:2},
+        {x:0,y:2}
+    ];
 }
 
-function drawPlayer(){
-    ctx.fillStyle = player.color;
+function same(a,b){
+    return a.x===b.x && a.y===b.y;
+}
+
+function drawTile(x,y,color){
+    ctx.fillStyle=color;
     ctx.fillRect(
-        player.x*TILE+4,
-        player.y*TILE+4,
-        TILE-8,
-        TILE-8
+        x*SIZE,
+        y*SIZE,
+        SIZE,
+        SIZE
     );
 }
 
-function drawMonster(){
-    ctx.fillStyle = monster.color;
+function drawHosePart(part,index){
 
-    ctx.fillRect(
-        monster.x*TILE+4,
-        monster.y*TILE+4,
-        TILE-8,
-        TILE-8
+    if(index===0){
+
+        // hose head
+        drawTile(part.x,part.y,"#2f9cff");
+
+        ctx.fillStyle="white";
+
+        ctx.fillRect(
+            part.x*SIZE+20,
+            part.y*SIZE+8,
+            5,
+            5
+        );
+
+    }else{
+
+        drawTile(
+            part.x,
+            part.y,
+            "#35d65f"
+        );
+    }
+}
+
+function drawRock(){
+
+    let x = rock.x*SIZE;
+    let y = rock.y*SIZE;
+
+    ctx.fillStyle="#777";
+    ctx.beginPath();
+
+    ctx.arc(
+        x+16,
+        y+16,
+        14,
+        0,
+        Math.PI*2
     );
 
-    // eyes
-    ctx.fillStyle = "white";
+    ctx.fill();
 
-    ctx.fillRect(monster.x*TILE+8, monster.y*TILE+10, 5, 5);
-    ctx.fillRect(monster.x*TILE+18, monster.y*TILE+10, 5, 5);
+    // crack
+    ctx.strokeStyle="black";
+    ctx.lineWidth=2;
+
+    ctx.beginPath();
+    ctx.moveTo(x+16,y+6);
+    ctx.lineTo(x+12,y+16);
+    ctx.lineTo(x+20,y+26);
+    ctx.stroke();
 }
 
-function drawKeys(){
-    for(let key of keys){
+function drawGrow(){
 
-        if(!key.found){
+    let x = growFood.x*SIZE;
+    let y = growFood.y*SIZE;
 
-            ctx.fillStyle = "gold";
+    // hose roll
+    ctx.strokeStyle="#2f9cff";
+    ctx.lineWidth=4;
 
-            ctx.fillRect(
-                key.x*TILE+10,
-                key.y*TILE+10,
-                12,
-                12
-            );
+    ctx.beginPath();
+    ctx.arc(
+        x+16,
+        y+16,
+        10,
+        0,
+        Math.PI*2
+    );
+
+    ctx.stroke();
+}
+
+function drawObstacle(o){
+
+    let x=o.x*SIZE;
+    let y=o.y*SIZE;
+
+    // crate
+    ctx.fillStyle="#9b5a24";
+
+    ctx.fillRect(
+        x+2,
+        y+2,
+        28,
+        28
+    );
+
+    ctx.strokeStyle="#6d3b15";
+
+    ctx.strokeRect(
+        x+2,
+        y+2,
+        28,
+        28
+    );
+}
+
+function move(){
+
+    let head = {
+        x:hose[0].x+dir.x,
+        y:hose[0].y+dir.y
+    };
+
+    if(
+        head.x<0 ||
+        head.y<0 ||
+        head.x>=W ||
+        head.y>=H
+    ){
+        generateLevel();
+        return;
+    }
+
+    for(let o of obstacles){
+        if(same(head,o)){
+            generateLevel();
+            return;
         }
     }
-}
 
-function drawText(){
-
-    if(gameOver){
-        ctx.fillStyle = "red";
-        ctx.font = "48px monospace";
-        ctx.fillText("GAME OVER", 300, 300);
-    }
-
-    if(win){
-        ctx.fillStyle = "lime";
-        ctx.font = "48px monospace";
-        ctx.fillText("YOU WIN!", 330, 300);
-    }
-}
-
-function updateKeys(){
-
-    for(let key of keys){
-
-        if(!key.found &&
-           player.x === key.x &&
-           player.y === key.y){
-
-            key.found = true;
-            collected++;
-
-            document.getElementById("keyCount").textContent = collected;
-
-            if(collected === keys.length){
-                win = true;
-            }
+    for(let part of hose){
+        if(same(head,part)){
+            generateLevel();
+            return;
         }
     }
-}
 
-function moveMonster(){
+    hose.unshift(head);
 
-    if(gameOver || win) return;
+    if(same(head,growFood)){
 
-    let dx = 0;
-    let dy = 0;
+        growFood={
+            x:rand(W-4)+2,
+            y:rand(H-4)+2
+        };
 
-    // basic AI chase
-    if(Math.random() < 0.5){
+    }else{
 
-        if(monster.x < player.x) dx = 1;
-        else if(monster.x > player.x) dx = -1;
-
-    } else {
-
-        if(monster.y < player.y) dy = 1;
-        else if(monster.y > player.y) dy = -1;
+        hose.pop();
     }
 
-    let nx = monster.x + dx;
-    let ny = monster.y + dy;
+    // win
+    if(
+        Math.abs(head.x-rock.x)<=1 &&
+        Math.abs(head.y-rock.y)<=1 &&
+        hose.length>=8
+    ){
 
-    if(!isWall(nx, ny)){
-        monster.x = nx;
-        monster.y = ny;
-    }
+        level++;
+        alert(
+            "You filled the rock crack! Level "+level
+        );
 
-    if(monster.x === player.x &&
-       monster.y === player.y){
-
-        gameOver = true;
+        generateLevel();
     }
 }
 
-window.addEventListener("keydown", e => {
+function draw(){
 
-    if(gameOver || win) return;
+    ctx.clearRect(
+        0,0,
+        canvas.width,
+        canvas.height
+    );
 
-    let dx = 0;
-    let dy = 0;
-
-    switch(e.key.toLowerCase()){
-
-        case "arrowup":
-        case "w":
-            dy = -1;
-            break;
-
-        case "arrowdown":
-        case "s":
-            dy = 1;
-            break;
-
-        case "arrowleft":
-        case "a":
-            dx = -1;
-            break;
-
-        case "arrowright":
-        case "d":
-            dx = 1;
-            break;
+    for(let o of obstacles){
+        drawObstacle(o);
     }
 
-    let nx = player.x + dx;
-    let ny = player.y + dy;
+    drawGrow();
 
-    if(!isWall(nx, ny)){
-        player.x = nx;
-        player.y = ny;
-    }
+    drawRock();
 
-    updateKeys();
+    hose.forEach(drawHosePart);
 
-    if(monster.x === player.x &&
-       monster.y === player.y){
+    ctx.fillStyle="white";
+    ctx.font="20px monospace";
 
-        gameOver = true;
-    }
+    ctx.fillText(
+        "LEVEL: "+level+
+        "  HOSE: "+hose.length,
+        10,
+        25
+    );
+}
+
+window.addEventListener(
+"keydown",
+e=>{
+
+    if(e.key==="ArrowUp") dir={x:0,y:-1};
+    if(e.key==="ArrowDown") dir={x:0,y:1};
+    if(e.key==="ArrowLeft") dir={x:-1,y:0};
+    if(e.key==="ArrowRight") dir={x:1,y:0};
+
 });
 
-function gameLoop(){
+generateLevel();
 
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+setInterval(()=>{
 
-    drawMaze();
-    drawKeys();
-    drawPlayer();
-    drawMonster();
-    drawText();
+    move();
+    draw();
 
-    requestAnimationFrame(gameLoop);
-}
+},140);
 
-setInterval(moveMonster, 300);
-
-gameLoop();
 </script>
 
 </body>
