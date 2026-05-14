@@ -3,270 +3,378 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>THE COAL PIT: EVOLUTION</title>
+    <title>THE COAL PIT: EVOLUTION VISUAL</title>
     <style>
-        :root {
-            --bg-color: #050505;
-            --text-color: #d1d1d1;
-            --accent-color: #ff3333;
-            --panel-bg: #121212;
-        }
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            background-color: #030303;
+            color: #d1d1d1;
             font-family: 'Courier New', Courier, monospace;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            user-select: none;
+            overflow: hidden;
         }
-        #game-container {
-            width: 100%;
-            max-width: 750px;
-            background: var(--panel-bg);
-            border: 2px solid #333;
-            padding: 20px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
-        }
-        header {
-            border-bottom: 2px dashed #444;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        h1 {
-            color: var(--accent-color);
-            margin: 0 0 5px 0;
-            font-size: 24px;
-            letter-spacing: 2px;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            background: #1a1a1a;
-            padding: 10px;
-            border: 1px solid #333;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-        .stat-line span {
-            color: #fff;
-            font-weight: bold;
-        }
-        #log-window {
-            height: 220px;
-            overflow-y: auto;
-            background: #0a0a0a;
-            border: 1px solid #222;
-            padding: 15px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-        .log-entry {
+        #ui-layer {
+            width: 640px;
+            display: flex;
+            justify-content: space-between;
             margin-bottom: 8px;
-            border-left: 3px solid #555;
-            padding-left: 8px;
+            font-size: 14px;
+            text-shadow: 0px 2px 4px #000;
         }
-        .log-entry.system { border-color: #00aaee; color: #00aaee; }
-        .log-entry.danger { border-color: var(--accent-color); color: var(--accent-color); font-weight: bold; }
-        .log-entry.success { border-color: #00ff66; color: #00ff66; }
-        #controls {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
-        button {
-            background: #222;
+        .stat span {
             color: #fff;
-            border: 1px solid #444;
-            padding: 12px;
-            font-family: inherit;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: left;
-        }
-        button:hover:not(:disabled) {
-            background: var(--accent-color);
-            color: #000;
-            border-color: #fff;
             font-weight: bold;
         }
-        button:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
+        #gameCanvas {
+            border: 4px solid #1a1a1a;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.15);
+            background-color: #0b0b0d;
+            image-rendering: pixelated;
         }
-        .mutation-tag {
-            color: #ffaa00 !important;
+        #message-overlay {
+            margin-top: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #ff3333;
+            text-align: center;
+            max-width: 640px;
+            height: 24px;
+        }
+        .instructions {
+            color: #666;
+            font-size: 11px;
+            margin-top: 5px;
         }
     </style>
 </head>
 <body>
 
-<div id="game-container">
-    <header>
-        <h1>SUB-LEVEL 4: MINESHAFTS</h1>
-        <p style="margin:5px 0 0 0; font-size:12px; color:#777;">Avoid the evolving entity. Deliver coal. Escape.</p>
-    </header>
-
-    <div class="stats-grid">
-        <div class="stat-line">Location: <span id="stat-loc">Elevator Hub</span></div>
-        <div class="stat-line">Inventory: <span id="stat-inv">Empty</span></div>
-        <div class="stat-line">Cart Status: <span id="stat-cart">0 / 3 Coal Loaded</span></div>
-        <div class="stat-line">Monster Status: <span id="stat-monster" class="mutation-tag">Stage 0 (Blind)</span></div>
-        <div class="stat-line">Battery Life: <span id="stat-battery">100%</span></div>
-        <div class="stat-line">Mine Temperature: <span id="stat-temp">19°C</span></div>
-    </div>
-
-    <div id="log-window"></div>
-
-    <div id="controls">
-        <button id="btn-n" onclick="move('North')">↑ Move North (Deep Excavation)</button>
-        <button id="btn-e" onclick="move('East')">→ Move East (Drainage Shaft)</button>
-        <button id="btn-s" onclick="move('South')">↓ Move South (Storage Depot)</button>
-        <button id="btn-w" onclick="move">← Move West (Elevator Hub)</button>
-        <button id="btn-action" onclick="performAction()">⛏️ Search / Mine Area</button>
-        <button id="btn-cart" onclick="interactCart()">🛒 Interact with Cart</button>
-    </div>
+<div id="ui-layer">
+    <div class="stat">COAL LOADED: <span id="ui-coal">0/3</span></div>
+    <div class="stat">MUTATION: <span id="ui-stage" style="color: #ffaa00;">Stage 0 (Blind)</span></div>
+    <div class="stat">STATUS: <span id="ui-status" style="color: #00ff66;">Searching...</span></div>
 </div>
 
+<canvas id="gameCanvas" width="640" height="480"></canvas>
+
+<div id="message-overlay" id="ui-msg">USE WASD / ARROWS TO MOVE. COLLECT COAL CHUNKS.</div>
+<div class="instructions">Walk onto Coal to pick it up. Drop it off at the Cart/Furnace. Escape to the Left Elevator.</div>
+
 <script>
-    // Game state variables
-    let playerLocation = "Hub"; 
-    let inventory = null; // Can hold "Coal"
-    let cartCoalCount = 0;
-    let monsterStage = 0;
-    let battery = 100;
-    let temperature = 19;
-    let isGameOver = false;
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
 
-    // Map configuration: item availability and monster locations
-    // Monster positions are numbers 0-3 corresponding to Hub, North, East, South
-    const rooms = ["Hub", "North", "East", "South"];
-    let monsterRoomIndex = 1; // Starts in North
-    let coalAvailable = { "North": true, "East": true, "South": true };
+    // Grid details (20 columns x 15 rows)
+    const TILE_SIZE = 32;
+    const COLS = 20;
+    const ROWS = 15;
 
-    const logWin = document.getElementById("log-window");
+    // Tile Definitions: 1=Wall, 0=Floor, 2=Furnace/Cart Hub, 3=Elevator Escape
+    const map = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [3,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+        [3,0,2,0,1,0,1,1,0,1,0,1,1,1,0,1,0,1,0,1],
+        [1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0,1],
+        [1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,1,1,0,1],
+        [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+        [1,0,1,0,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
+        [1,0,1,0,0,0,0,1,0,1,0,0,0,0,0,1,0,0,0,1],
+        [1,0,1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,1],
+        [1,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
+        [1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1],
+        [1,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    ];
 
-    // Initialize game
-    function initGame() {
-        logMessage("SYSTEM: Power grid online. Elevator is locked until 3 Coal loads are secured in the cart.", "system");
-        logMessage("You stand at the Elevator Hub. The tunnels branching off are dead silent.", "normal");
-        updateUI();
+    // Entity positions (Grid Coords)
+    let player = { x: 2, y: 1, hasCoal: false };
+    let monster = { x: 18, y: 13, stage: 0, tickCounter: 0 };
+    
+    // 3 Fixed Coal chunks placement locations
+    let coalItems = [
+        { x: 18, y: 1, active: true },
+        { x: 1, y: 13, active: true },
+        { x: 13, y: 9, active: true }
+    ];
+
+    let coalLoaded = 0;
+    let gameOver = false;
+    let gameWon = false;
+    let flameFrame = 0;
+
+    // Game message tracking
+    function setMsg(txt, color="#ff3333") {
+        const overlay = document.getElementById("message-overlay");
+        overlay.innerText = txt;
+        overlay.style.color = color;
     }
 
-    function logMessage(text, type = "normal") {
-        const entry = document.createElement("div");
-        entry.className = `log-entry ${type}`;
-        entry.innerText = text;
-        logWin.appendChild(entry);
-        logWin.scrollTop = logWin.scrollHeight;
-    }
-
-    function updateUI() {
-        document.getElementById("stat-loc").innerText = playerLocation === "Hub" ? "Elevator Hub" : playerLocation + " Tunnel";
-        document.getElementById("stat-inv").innerText = inventory ? inventory : "Empty";
-        document.getElementById("stat-cart").innerText = `${cartCoalCount} / 3 Coal Loaded`;
-        document.getElementById("stat-battery").innerText = `${battery}%`;
-        document.getElementById("stat-temp").innerText = `${temperature}°C`;
-
-        // Monster stage text
-        const monsterTxt = document.getElementById("stat-monster");
-        if (monsterStage === 0) monsterTxt.innerText = "Stage 0 (Blind)";
-        else if (monsterStage === 1) monsterTxt.innerText = "Stage 1 (Hearing Unlocked)";
-        else if (monsterStage === 2) monsterTxt.innerText = "Stage 2 (Scent Tracking)";
-        else monsterTxt.innerText = "Stage 3 (Absolute Hunter)";
-
-        // Configure action button text contextually
-        const actBtn = document.getElementById("btn-action");
-        if (coalAvailable[playerLocation]) {
-            actBtn.innerText = "⛏️ Mine Coal Deposit";
-            actBtn.disabled = false;
-        } else {
-            actBtn.innerText = "⛏️ Search Area (Empty)";
-            actBtn.disabled = true;
-        }
-        if (playerLocation === "Hub") {
-            actBtn.innerText = "🔧 Inspect Elevator Controls";
-            actBtn.disabled = false;
-        }
-
-        // Cart interaction button visibility
-        const cartBtn = document.getElementById("btn-cart");
-        if (playerLocation === "Hub") {
-            cartBtn.style.display = "block";
-            cartBtn.innerText = inventory === "Coal" ? "🛒 Deposit Coal into Cart" : (cartCoalCount === 3 ? "🚀 Pull Elevator Lever to Escape!" : "🛒 Check Mine Cart");
-        } else {
-            cartBtn.style.display = "none";
-        }
-
-        // Disable core movement targets matching current room
-        document.getElementById("btn-w").disabled = (playerLocation === "Hub") || isGameOver;
-        document.getElementById("btn-n").disabled = (playerLocation === "North") || isGameOver;
-        document.getElementById("btn-e").disabled = (playerLocation === "East") || isGameOver;
-        document.getElementById("btn-s").disabled = (playerLocation === "South") || isGameOver;
+    // Input handlers
+    window.addEventListener("keydown", (e) => {
+        if (gameOver || gameWon) return;
         
-        if (isGameOver) {
-            actBtn.disabled = true;
-            cartBtn.disabled = true;
-        }
-    }
-
-    function move(direction) {
-        if (isGameOver) return;
-        playerLocation = direction;
-        logMessage(`You walk carefully into the ${direction === 'Hub' ? 'Elevator Hub' : direction + ' Tunnel'}.`);
+        let dx = 0;
+        let dy = 0;
         
-        battery = Math.max(0, battery - 4);
-        gameTick(false); // standard movement tick
-    }
+        if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") dy = -1;
+        if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") dy = 1;
+        if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") dx = -1;
+        if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") dx = 1;
 
-    function performAction() {
-        if (isGameOver) return;
+        if (dx !== 0 || dy !== 0) {
+            movePlayer(dx, dy);
+        }
+    });
 
-        if (playerLocation === "Hub") {
-            if (cartCoalCount = 2) {
-            // Sniffs out tracks: 75% chance to move directly toward the player's room regardless of noise
-            if (Math.random() < 0.75) {
-                targetRoomIndex = rooms.indexOf(playerLocation);
-                logMessage("A deep, sickening breathing sound echoes closer. It knows your scent.", "danger");
+    function movePlayer(dx, dy) {
+        let newX = player.x + dx;
+        let newY = player.y + dy;
+
+        // Wall check
+        if (map[newY][newX] === 1) return;
+
+        // Apply movement
+        player.x = newX;
+        player.y = newY;
+
+        // 1. Interaction check: Pick up coal
+        coalItems.forEach(coal => {
+            if (coal.active && player.x === coal.x && player.y === coal.y && !player.hasCoal) {
+                coal.active = false;
+                player.hasCoal = true;
+                setMsg("PICKED UP COAL! DELIVER IT TO THE FURNACE HUBS (ORANGE TILE)", "#ffaa00");
+            }
+        });
+
+        // 2. Interaction check: Drop coal off at Furnace / Cart Hub (Tile 2)
+        if (map[player.y][player.x] === 2 && player.hasCoal) {
+            player.hasCoal = false;
+            coalLoaded++;
+            monster.stage++;
+            document.getElementById("ui-coal").innerText = `${coalLoaded}/3`;
+            
+            if (monster.stage === 1) {
+                document.getElementById("ui-stage").innerText = "Stage 1 (Hearing Unlocked)";
+                setMsg("THE FURNACE ROARS! COBB UNLOCKED HEARING.", "#ff3333");
+            } else if (monster.stage === 2) {
+                document.getElementById("ui-stage").innerText = "Stage 2 (Scent Tracking)";
+                setMsg("COBB UNLOCKED SCENT TRACKING. HE CAN SMELL YOU.", "#ff3333");
             } else {
-                targetRoomIndex = Math.floor(Math.random() * rooms.length);
+                document.getElementById("ui-stage").innerText = "Stage 3 (Absolute Hunter)";
+                setMsg("FINAL EVOLUTION ACHIEVED! COBB IS RUNNING FAST.", "#ff0000");
             }
         }
 
-        monsterRoomIndex = targetRoomIndex;
-        let monsterNewRoom = rooms[monsterRoomIndex];
-
-        // 2. Proximity Warnings
-        if (monsterNewRoom === playerLocation) {
-            // Caught check
-            isGameOver = true;
-            logMessage("💀 DEATH: A mutated silhouette emerges instantly from the shadow behind you. Before you can look back, you are dragged away into the darkness...", "danger");
-            updateUI();
-            return;
-        } else {
-            // Nearby ambient warning indicators
-            if ((playerLocation === "Hub" && monsterNewRoom !== "Hub") || (playerLocation !== "Hub" && monsterNewRoom === "Hub")) {
-                logMessage("Your flashlight flickers mildly. Something cold is in the adjacent tunnel corridor...");
+        // 3. Interaction check: Escape via elevator (Tile 3)
+        if (map[player.y][player.x] === 3) {
+            if (coalLoaded >= 3) {
+                gameWon = true;
+                setMsg("YOU ESCAPED THE COAL PIT! YOU WIN!", "#00ff66");
+                document.getElementById("ui-status").innerText = "ESCAPED";
+                return;
+            } else {
+                setMsg("ELEVATOR LOCKED! MUST DEPOSIT ALL 3 COAL TO ACTIVATE POWER.", "#ff3333");
             }
         }
 
-        if (battery <= 0) {
-            isGameOver = true;
-            logMessage("💀 DEAD BATTERY: Your flashlight dies. Left in total pitching darkness without bearings, the creature finds you instantly.", "danger");
-        }
-
-        updateUI();
+        // Tick monster AI every time player completes a movement step
+        updateMonsterAI();
+        checkCollisions();
     }
 
-    // Launch game on load
-    window.onload = initGame;
+    function updateMonsterAI() {
+        monster.tickCounter++;
+        
+        // Stage 3 speeds up monster tracking cycles
+        let tickInterval = monster.stage >= 3 ? 1 : 2;
+        if (monster.tickCounter % tickInterval !== 0) return;
+
+        let possibleMoves = [];
+        let directions = [{x:0, y:-1}, {x:0, y:1}, {x:-1, y:0}, {x:1, y:0}];
+
+        directions.forEach(d => {
+            let nX = monster.x + d.x;
+            let nY = monster.y + d.y;
+            // Valid path inside grid borders that isn't a wall
+            if (nY >= 0 && nY < ROWS && nX >= 0 && nX < COLS) {
+                if (map[nY][nX] !== 1) {
+                    possibleMoves.push({x: nX, y: nY});
+                }
+            }
+        });
+
+        if (possibleMoves.length === 0) return;
+
+        // AI Rule Decision tree matching Cobb Can Move mutations
+        if (monster.stage === 0) {
+            // Random movements
+            let choice = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+            monster.x = choice.x;
+            monster.y = choice.y;
+        } 
+        else {
+            // Stage 1, 2, and 3 use tracking algorithms targeting the player's coordinate vectors
+            let bestMove = possibleMoves[0];
+            let minDistance = Infinity;
+
+            possibleMoves.forEach(move => {
+                let dist = Math.abs(move.x - player.x) + Math.abs(move.y - player.y);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestMove = move;
+                }
+            });
+
+            // Stage 1 has a slight structural error chance, Stage 2+ hunts flawlessly
+            if (monster.stage === 1 && Math.random() < 0.3) {
+                let choice = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                monster.x = choice.x;
+                monster.y = choice.y;
+            } else {
+                monster.x = bestMove.x;
+                monster.y = bestMove.y;
+            }
+        }
+    }
+
+    function checkCollisions() {
+        if (player.x === monster.x && player.y === monster.y) {
+            gameOver = true;
+            document.getElementById("ui-status").innerText = "DEAD";
+            setMsg("💀 COBB CAUGHT YOU! REFRESH PAGE TO TRY AGAIN.", "#ff1111");
+        }
+    }
+
+    // Main Engine Render loop
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        flameFrame += 0.15; // Track custom tile animations
+
+        // Loop over rendering blocks
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                let x = c * TILE_SIZE;
+                let y = r * TILE_SIZE;
+
+                if (map[r][c] === 1) {
+                    // Brickwork styling
+                    ctx.fillStyle = "#1e1e24";
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                    ctx.strokeStyle = "#111114";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+                } else if (map[r][c] === 2) {
+                    // Animated Furnace Fire Hub
+                    ctx.fillStyle = "#2c1a10";
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                    // Blazing inner flame block
+                    let flameHeight = 10 + Math.sin(flameFrame) * 6;
+                    ctx.fillStyle = "#ff5500";
+                    ctx.fillRect(x + 4, y + 24 - flameHeight, TILE_SIZE - 8, flameHeight);
+                    ctx.fillStyle = "#ffaa00";
+                    ctx.fillRect(x + 8, y + 22 - (flameHeight/2), TILE_SIZE - 16, flameHeight / 2);
+                } else if (map[r][c] === 3) {
+                    // Metallic grid pattern for Lift shaft
+                    ctx.fillStyle = "#3a4454";
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                    ctx.fillStyle = "#1e222b";
+                    ctx.fillRect(x + 4, y, 4, TILE_SIZE);
+                    ctx.fillRect(x + 14, y, 4, TILE_SIZE);
+                    ctx.fillRect(x + 24, y, 4, TILE_SIZE);
+                } else {
+                    // Regular floor plates
+                    ctx.fillStyle = "#0c0d12";
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                    ctx.strokeStyle = "#13141a";
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+                }
+            }
+        }
+
+        // Draw Coal Chunks
+        coalItems.forEach(coal => {
+            if (coal.active) {
+                let cx = coal.x * TILE_SIZE;
+                let cy = coal.y * TILE_SIZE;
+                ctx.fillStyle = "#4a4e59"; // Dark carbon texturing
+                ctx.beginPath();
+                ctx.arc(cx + 16, cy + 16, 9, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "#1c1d21";
+                ctx.fillRect(cx + 12, cy + 12, 6, 6);
+            }
+        });
+
+        // Draw Player Character (White alien/skeleton outline style like Cobb Can Move)
+        let px = player.x * TILE_SIZE;
+        let py = player.y * TILE_SIZE;
+        
+        ctx.fillStyle = "#ffffff";
+        // Head
+        ctx.beginPath();
+        ctx.arc(px + 16, py + 10, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // Body limbs
+        ctx.fillRect(px + 13, py + 16, 6, 10); 
+        ctx.fillRect(px + 9, py + 18, 3, 6); // Arm L
+        ctx.fillRect(px + 20, py + 18, 3, 6); // Arm R
+        ctx.fillStyle = "#000";
+        ctx.fillRect(px + 12, py + 9, 2, 2); // Eyes
+        ctx.fillRect(px + 18, py + 9, 2, 2);
+
+        // If carrying a chunk of coal, render a small block attached above the head
+        if (player.hasCoal) {
+            ctx.fillStyle = "#555";
+            ctx.fillRect(px + 11, py - 4, 10, 10);
+        }
+
+        // Draw Monster (Red giant-armed mutant)
+        let mx = monster.x * TILE_SIZE;
+        let my = monster.y * TILE_SIZE;
+        ctx.fillStyle = "#cc1111";
+        // Large dome head
+        ctx.beginPath();
+        ctx.arc(mx + 16, my + 12, 10, 0, Math.PI * 2);
+        ctx.fill();
+        // Sprawled jaw teeth line
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(mx + 10, my + 15, 12, 4);
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(mx + 12, my + 15, 2, 4);
+        ctx.fillRect(mx + 15, my + 15, 2, 4);
+        ctx.fillRect(mx + 18, my + 15, 2, 4);
+        // Long dynamic side reach arm frames
+        ctx.fillStyle = "#cc1111";
+        ctx.fillRect(mx - 2, my + 10, 5, 16); 
+        ctx.fillRect(mx + 29, my + 10, 5, 16);
+
+        // 🔦 Dynamic Darkness Overlay Vignette Effect
+        // This limits your view circle exclusively around the character to simulate a real flashlight
+        let gradient = ctx.createRadialGradient(
+            px + 16, py + 16, 20, // Center circle start
+            px + 16, py + 16, 140  // Outward ring fade edge radius
+        );
+        gradient.addColorStop(0, "rgba(0,0,0,0)");
+        gradient.addColorStop(0.7, "rgba(0,0,0,0.5)");
+        gradient.addColorStop(1, "rgba(3,3,5,0.98)"); // Pitch black fill out of bounds
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Continuous game animation ticker
+        requestAnimationFrame(draw);
+    }
+
+    // Run engine setup
+    draw();
 </script>
 
 </body>
