@@ -1,266 +1,316 @@
-import pygame
-import sys
-import random
-import math
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE COAL PIT: REAL-TIME EVOLUTION</title>
+    <style>
+        body {
+            background-color: #050508;
+            color: #d1d1d1;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #ui-layer {
+            width: 800px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 0px 2px 4px #000;
+        }
+        #gameCanvas {
+            border: 4px solid #222125;
+            box-shadow: 0 0 35px rgba(200, 20, 20, 0.2);
+            background-color: #0a090d;
+        }
+        #msg-box {
+            margin-top: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #ff3333;
+            text-shadow: 0px 1px 3px #000;
+            height: 24px;
+        }
+    </style>
+</head>
+<body>
 
-# Initialize Engine
-pygame.init()
-WIDTH, HEIGHT = 800, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("THE COAL PIT: REAL-TIME EVOLUTION")
-clock = pygame.time.Clock()
+<div id="ui-layer">
+    <div>DEPTH: <span id="ui-depth" style="color:#00ff66;">B1</span></div>
+    <div>COAL IN CART: <span id="ui-coal" style="color:#fff;">0 / 3</span></div>
+    <div>COBB MUTATION: <span id="ui-stage" style="color:#ffaa00;">Stage 0 (Blind)</span></div>
+</div>
 
-# Color Palettes (Retro Pixels)
-COLOR_BG = (10, 10, 14)
-COLOR_WALL = (45, 42, 50)
-COLOR_TRACK = (90, 85, 95)
-COLOR_COAL = (25, 25, 30)
+<canvas id="gameCanvas" width="800" height="600"></canvas>
 
-# Game Variables
-TILE_SIZE = 40
-GRID_W = WIDTH // TILE_SIZE
-GRID_H = HEIGHT // TILE_SIZE
+<div id="msg-box">COBB IS WALKING. PUSH THE CART TO THE ELEVATOR SHAFT!</div>
 
-class GameState:
-    def __init__(self):
-        self.level = 1
-        self.coal_collected = 0
-        self.coal_needed = 3
-        self.game_over = False
-        self.game_won = False
-        self.generate_level()
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
 
-    def generate_level(self):
-        self.coal_collected = 0
-        
-        # 1. Procedural Mine Layout Generation (Tunnels rather than Mazes)
-        self.grid = [[1 for _ in range(GRID_W)] for _ in range(GRID_H)]
-        
-        # Carve Main Railway Tracks loop
-        for x in range(2, GRID_W - 2):
-            self.grid[GRID_H // 2][x] = 0
-        for y in range(2, GRID_H - 2):
-            self.grid[y][GRID_W // 2] = 0
-            
-        # Carve out mining pockets
-        self.pockets = [(3, 3), (GRID_W - 4, 3), (3, GRID_H - 4), (GRID_W - 4, GRID_H - 4)]
-        for px, py in self.pockets:
-            for dx in range(-1, 2):
-                for dy in range(-1, 2):
-                    self.grid[py + dy][px + dx] = 0
+    const TILE_SIZE = 40;
+    const COLS = 20;
+    const ROWS = 15;
 
-        # Place Objects
-        self.player_x, self.player_y = 2, GRID_H // 2
-        self.cart_x, self.cart_y = 3, GRID_H // 2
-        self.elevator_x, self.elevator_y = GRID_W - 3, GRID_H // 2
-        
-        # Spawn Coal Nodes
-        self.coal_nodes = [{"x": p, "y": p, "active": True} for p in self.pockets[:3]]
-        
-        # Configure Evolving Enemy (Real-time tracking attributes)
-        self.monster = Monster(GRID_W - 4, GRID_H - 4, self.level)
-
-class Monster:
-    def __init__(self, x, y, level):
-        self.x = x
-        self.y = y
-        self.stage = level - 1 
-        self.anim_frame = 0
-        # Time-based movement speeds (in milliseconds)
-        # Level 1 = 600ms per step. Higher levels speed up drastically.
-        self.move_speed_ms = max(200, 600 - (level * 80))
-        self.last_move_time = pygame.time.get_ticks()
-
-    def animate(self):
-        # Frame counter loops continuously for heavy step/breathing effects
-        self.anim_frame = (self.anim_frame + 0.1) % 4
-
-    def update_position_realtime(self, current_time, p_x, p_y, grid):
-        # Check if enough time has passed on the engine clock to take a step
-        if current_time - self.last_move_time < self.move_speed_ms:
-            return
-
-        self.last_move_time = current_time
-        
-        # Default target vector directions
-        dx = int(math.copysign(1, p_x - self.x)) if p_x != self.x else 0
-        dy = int(math.copysign(1, p_y - self.y)) if p_y != self.y else 0
-        
-        # 🟢 Real-Time Mutation AI Decision Tree
-        if self.stage == 0: 
-            # Stage 0: Completely blind wanderer. Chooses a random open direction card.
-            valid_moves = []
-            for ox, oy in [(0,1), (0,-1), (1,0), (-1,0)]:
-                if grid[self.y + oy][self.x + ox] == 0:
-                    valid_moves.append((ox, oy))
-            if valid_moves:
-                dx, dy = random.choice(valid_moves)
-        elif self.stage == 1:
-            # Stage 1: Weak Tracking. 35% chance to wander stupidly, otherwise hunts vectors.
-            if random.random() < 0.35:
-                valid_moves = []
-                for ox, oy in [(0,1), (0,-1), (1,0), (-1,0)]:
-                    if grid[self.y + oy][self.x + ox] == 0:
-                        valid_moves.append((ox, oy))
-                if valid_moves:
-                    dx, dy = random.choice(valid_moves)
-
-        # Execute physical grid movement step if no walls block path
-        if grid[self.y + dy][self.x + dx] == 0:
-            self.x += dx
-            self.y += dy
-        elif grid[self.y][self.x + dx] == 0: # Smart sliding slide checks
-            self.x += dx
-        elif grid[self.y + dy][self.x] == 0:
-            self.y += dy
-
-# Instantiation
-game = GameState()
-anim_tick = 0
-
-def draw_mine_environment():
-    for y in range(GRID_H):
-        for x in range(GRID_W):
-            rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-            if game.grid[y][x] == 1:
-                pygame.draw.rect(screen, COLOR_WALL, rect)
-                pygame.draw.rect(screen, (20, 18, 22), rect, 2)
-            else:
-                pygame.draw.rect(screen, (18, 16, 15), rect)
-                
-    # Draw Cross-Ties Railway Track Networks
-    for x in range(2, GRID_W - 2):
-        y = GRID_H // 2
-        pygame.draw.line(screen, COLOR_TRACK, (x*TILE_SIZE, y*TILE_SIZE + 15), ((x+1)*TILE_SIZE, y*TILE_SIZE + 15), 2)
-        pygame.draw.line(screen, COLOR_TRACK, (x*TILE_SIZE, y*TILE_SIZE + 25), ((x+1)*TILE_SIZE, y*TILE_SIZE + 25), 2)
-        for i in range(0, TILE_SIZE, 10):
-            pygame.draw.line(screen, (60, 50, 40), (x*TILE_SIZE + i, y*TILE_SIZE + 10), (x*TILE_SIZE + i, y*TILE_SIZE + 30), 3)
-
-def draw_entities():
-    global anim_tick
-    anim_tick += 0.1
+    // Game Core State Variables
+    let currentLevel = 1;
+    let coalCollected = 0;
+    let coalNeeded = 3;
+    let gameOver = false;
     
-    # 1. Draw Coal Nodes
-    for coal in game.coal_nodes:
-        if coal["active"]:
-            cx, cy = coal["x"] * TILE_SIZE + 20, coal["y"] * TILE_SIZE + 20
-            pygame.draw.circle(screen, COLOR_COAL, (cx, cy), 12)
-            pygame.draw.circle(screen, (50, 55, 60), (cx - 3, cy - 3), 4)
-
-    # 2. Draw Mine Cart
-    mx, my = game.cart_x * TILE_SIZE + 4, game.cart_y * TILE_SIZE + 10
-    pygame.draw.rect(screen, (70, 75, 85), (mx, my, 32, 22)) 
-    pygame.draw.circle(screen, (20, 20, 20), (mx + 6, my + 24), 5) 
-    pygame.draw.circle(screen, (20, 20, 20), (mx + 26, my + 24), 5)
-    if game.coal_collected > 0: 
-        pygame.draw.ellipse(screen, COLOR_COAL, (mx + 4, my - 4, 24, 12))
-
-    # 3. Draw Elevator Shaft Gate Area
-    ex, ey = game.elevator_x * TILE_SIZE, game.elevator_y * TILE_SIZE
-    pygame.draw.rect(screen, (100, 100, 120), (ex, ey, TILE_SIZE, TILE_SIZE), 4)
-    for i in range(0, TILE_SIZE, 8):
-        pygame.draw.line(screen, (140, 30, 30), (ex + i, ey), (ex + i, ey + TILE_SIZE), 1)
-
-    # 4. Draw Animated Player Sprite
-    px, py = game.player_x * TILE_SIZE + 10, game.player_y * TILE_SIZE + 5
-    bounce = int(math.sin(anim_tick) * 2)
-    pygame.draw.circle(screen, (240, 240, 255), (px + 10, py + 8 + bounce), 7) 
-    pygame.draw.rect(screen, (40, 80, 150), (px + 4, py + 16, 12, 18)) 
-    pygame.draw.rect(screen, (255, 200, 0), (px + 6, py + 2 + bounce), 8, 3) 
-
-    # 5. Draw Animated Cobb Monster Sprite (Always processing animations)
-    game.monster.animate()
-    m_shift = int(math.sin(game.monster.anim_frame) * 4)
-    mon_x = game.monster.x * TILE_SIZE
-    mon_y = game.monster.y * TILE_SIZE
+    let player = { x: 2, y: 7 };
+    let cart = { x: 4, y: 7 };
+    let elevator = { x: 17, y: 7 };
     
-    # Monster body core
-    pygame.draw.ellipse(screen, (130, 20, 20), (mon_x + 4, mon_y + 2, 32, 36))
-    # Mutated Grinning Jaw structure
-    pygame.draw.rect(screen, (240, 240, 240), (mon_x + 8, mon_y + 16 + m_shift, 24, 6))
-    pygame.draw.rect(screen, (0, 0, 0), (mon_x + 12, mon_y + 16 + m_shift, 2, 6))
-    pygame.draw.rect(screen, (0, 0, 0), (mon_x + 18, mon_y + 16 + m_shift, 2, 6))
-    # Reaching asymmetric arm frames
-    pygame.draw.line(screen, (100, 10, 10), (mon_x + 4, mon_y + 12), (mon_x - 6, mon_y + 24 + m_shift), 4)
-    pygame.draw.line(screen, (100, 10, 10), (mon_x + 36, mon_y + 12), (mon_x + 46, mon_y + 20 - m_shift), 4)
+    let monster = { x: 17, y: 2, stage: 0, animFrame: 0, lastMoveTime: 0, speedMs: 600 };
+    let coalNodes = [];
+    let grid = [];
+    let animTick = 0;
 
-def apply_flashlight_vignette():
-    mask = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    mask.fill((3, 3, 6, 252)) 
-    
-    p_screen_x = game.player_x * TILE_SIZE + 20
-    p_screen_y = game.player_y * TILE_SIZE + 20
-    
-    for radius in range(160, 40, -4):
-        alpha = int(255 * (radius / 160))
-        pygame.draw.circle(mask, (0, 0, 0, alpha), (p_screen_x, p_screen_y), radius)
+    // Procedural Mine Generator (Creates straight rail lines and open coal pockets)
+    function generateLevel() {
+        coalCollected = 0;
+        monster.stage = Math.min(3, currentLevel - 1);
+        monster.speedMs = Math.max(180, 600 - (currentLevel * 90));
         
-    screen.blit(mask, (0, 0))
-
-# --- MAIN CORE REAL-TIME GAME LOOP ---
-while True:
-    current_time = pygame.time.get_ticks()
-    screen.fill(COLOR_BG)
-    
-    # 1. Continuous Independent Monster Behavior Update Thread
-    if not game.game_over:
-        game.monster.update_position_realtime(current_time, game.player_x, game.player_y, game.grid)
-
-    # 2. Player Input Event Catchers
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
-            
-        elif event.type == pygame.KEYDOWN and not game.game_over:
-            dx, dy = 0, 0
-            if event.key in (pygame.K_LEFT, pygame.K_a): dx = -1
-            if event.key in (pygame.K_RIGHT, pygame.K_d): dx = 1
-            if event.key in (pygame.K_UP, pygame.K_w): dy = -1
-            if event.key in (pygame.K_DOWN, pygame.K_s): dy = 1
-            
-            new_px = game.player_x + dx
-            new_py = game.player_y + dy
-            
-            if game.grid[new_py][new_px] == 0:
-                # Track pushing handler
-                if new_px == game.cart_x and new_py == game.cart_y:
-                    if game.grid[game.cart_y + dy][game.cart_x + dx] == 0:
-                        game.cart_x += dx
-                        game.cart_y += dy
-                        game.player_x = new_px
-                        game.player_y = new_py
-                else:
-                    game.player_x = new_px
-                    game.player_y = new_py
-                
-                # Coal interaction
-                for coal in game.coal_nodes:
-                    if coal["active"] and game.player_x == coal["x"] and game.player_y == coal["y"]:
-                        coal["active"] = False
-                        game.coal_collected += 1
-
-    # 3. Game State Rule Checks
-    if game.player_x == game.monster.x and game.player_y == game.monster.y:
-        game.game_over = True
+        document.getElementById("ui-depth").innerText = `B${currentLevel}`;
+        document.getElementById("ui-coal").innerText = `0 / ${coalNeeded}`;
         
-    if game.cart_x == game.elevator_x and game.cart_y == game.elevator_y and game.coal_collected >= game.coal_needed:
-        game.level += 1
-        game.generate_level()
+        // Update Stage Text
+        const stages = ["Stage 0 (Blind)", "Stage 1 (Weak Hunter)", "Stage 2 (Scent Tracking)", "Stage 3 (Stalker)"];
+        document.getElementById("ui-stage").innerText = stages[monster.stage];
 
-    # 4. Draw Frame Layers
-    draw_mine_environment()
-    draw_entities()
-    apply_flashlight_vignette()
-    
-    # Render UI Layout Text Overlay
-    font = pygame.font.SysFont("Courier New", 18, bold=True)
-    ui_text = font.render(f"MINE DEPTH: B{game.level}  |  COAL IN CART: {game.coal_collected}/{game.coal_needed}", True, (255, 255, 255))
-    screen.blit(ui_text, (20, 20))
-    
-    if game.game_over:
-        loss_text = font.render("💀 COBB CONSUMED YOU. RE-RUN THE SCRIPT TO RESTART.", True, (255, 50, 50))
-        screen.blit(loss_text, (WIDTH//2 - 250, HEIGHT//2))
+        // Fill map with rock walls (1)
+        grid = Array(ROWS).fill().map(() => Array(COLS).fill(1));
 
-    pygame.display.flip()
-    clock.tick(60) # Limits system load rendering loops to a smooth 60fps
+        // Carve linear horizontal tracks corridor
+        for (let x = 1; x < COLS - 1; x++) grid[7][x] = 0;
+        // Carve linear vertical utility lane
+        for (let y = 1; y < ROWS - 1; y++) grid[y][10] = 0;
+
+        // Carve distinct wide mining chambers (Pockets)
+        const pockets = [{x:2, y:2}, {x:17, y:2}, {x:2, y:12}, {x:17, y:12}];
+        pockets.forEach(p => {
+            for (let dy = -1; dy  {
+        if (gameOver) return;
+        let dx = 0, dy = 0;
+
+        if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") dy = -1;
+        if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") dy = 1;
+        if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") dx = -1;
+        if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") dx = 1;
+
+        if (dx !== 0 || dy !== 0) {
+            let nextPx = player.x + dx;
+            let nextPy = player.y + dy;
+
+            if (grid[nextPy][nextPx] === 0) {
+                // Mine Cart Pushing Physics Engine Check
+                if (nextPx === cart.x && nextPy === cart.y) {
+                    let nextCx = cart.x + dx;
+                    let nextCy = cart.y + dy;
+                    // Cart moves forward along open paths
+                    if (grid[nextCy][nextCx] === 0) {
+                        cart.x = nextCx;
+                        cart.y = nextCy;
+                        player.x = nextPx;
+                        player.y = nextPy;
+                    }
+                } else {
+                    player.x = nextPx;
+                    player.y = nextPy;
+                }
+
+                // Check for coal mining hits
+                coalNodes.forEach(node => {
+                    if (node.active && player.x === node.x && player.y === node.y) {
+                        node.active = false;
+                        coalCollected++;
+                        document.getElementById("ui-coal").innerText = `${coalCollected} / ${coalNeeded}`;
+                    }
+                });
+            }
+        }
+    });
+
+    // ⏱️ Independent Real-Time Monster AI Loop Execution
+    function updateMonsterRealtime(timestamp) {
+        if (gameOver) return;
+
+        if (timestamp - monster.lastMoveTime > monster.speedMs) {
+            monster.lastMoveTime = timestamp;
+
+            let dx = Math.sign(player.x - monster.x);
+            let dy = Math.sign(player.y - monster.y);
+
+            if (monster.stage === 0) {
+                // Stage 0: Blindly picking random card slots
+                let moves = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}].filter(m => grid[monster.y + m.y][monster.x + m.x] === 0);
+                if (moves.length > 0) {
+                    let chosen = moves[Math.floor(Math.random() * moves.length)];
+                    dx = chosen.x; dy = chosen.y;
+                }
+            } else if (monster.stage === 1 && Math.random() < 0.4) {
+                // Stage 1: Weak tracking. 40% drift mistake rate.
+                let moves = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}].filter(m => grid[monster.y + m.y][monster.x + m.x] === 0);
+                if (moves.length > 0) {
+                    let chosen = moves[Math.floor(Math.random() * moves.length)];
+                    dx = chosen.x; dy = chosen.y;
+                }
+            }
+
+            // Move block checking execution
+            if (grid[monster.y + dy][monster.x + dx] === 0) {
+                monster.x += dx;
+                monster.y += dy;
+            } else if (grid[monster.y][monster.x + dx] === 0) {
+                monster.x += dx;
+            } else if (grid[monster.y + dy][monster.x] === 0) {
+                monster.y += dy;
+            }
+        }
+
+        // Kill check
+        if (player.x === monster.x && player.y === monster.y) {
+            gameOver = true;
+            document.getElementById("msg-box").innerText = "💀 COBB CONSUMED YOU. REFRESH PAGE TO RESTART THE ENGINES.";
+        }
+
+        // Check if level conditions are fully cleared
+        if (cart.x === elevator.x && cart.y === elevator.y && coalCollected >= coalNeeded) {
+            currentLevel++;
+            generateLevel();
+        }
+    }
+
+    // Continuous Frame Render Engine Loop
+    function render(timestamp) {
+        updateMonsterRealtime(timestamp);
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        animTick += 0.15;
+        monster.animFrame = (monster.animFrame + 0.12) % 4;
+
+        // 1. Draw Mine Map Elements
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                let x = c * TILE_SIZE;
+                let y = r * TILE_SIZE;
+
+                if (grid[r][c] === 1) {
+                    ctx.fillStyle = "#27252c";
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                    ctx.strokeStyle = "#151418";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+                } else {
+                    ctx.fillStyle = "#121115";
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                }
+            }
+        }
+
+        // 2. Draw Railway Tracks Line Overlays
+        for (let x = TILE_SIZE; x < canvas.width - TILE_SIZE; x += TILE_SIZE) {
+            let ry = 7 * TILE_SIZE;
+            ctx.strokeStyle = "#53505a";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, ry + 14); ctx.lineTo(x + TILE_SIZE, ry + 14);
+            ctx.moveTo(x, ry + 26); ctx.lineTo(x + TILE_SIZE, ry + 26);
+            ctx.stroke();
+            // Ties
+            ctx.strokeStyle = "#382e25";
+            ctx.lineWidth = 3;
+            for (let i = 0; i < TILE_SIZE; i += 10) {
+                ctx.beginPath(); ctx.moveTo(x + i, ry + 8); ctx.lineTo(x + i, ry + 32); ctx.stroke();
+            }
+        }
+
+        // 3. Draw Elevator Exit Door Frame
+        let ex = elevator.x * TILE_SIZE, ey = elevator.y * TILE_SIZE;
+        ctx.fillStyle = "#5c5b66";
+        ctx.fillRect(ex, ey, TILE_SIZE, TILE_SIZE);
+        ctx.fillStyle = "#8a1c1c";
+        for (let i = 4; i < TILE_SIZE; i += 8) ctx.fillRect(ex + i, ey, 2, TILE_SIZE);
+
+        // 4. Draw Active Carbon Coal Nodes
+        coalNodes.forEach(node => {
+            if (node.active) {
+                let nx = node.x * TILE_SIZE + 20, ny = node.y * TILE_SIZE + 20;
+                ctx.fillStyle = "#1c1b21";
+                ctx.beginPath(); ctx.arc(nx, ny, 11, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#474952";
+                ctx.beginPath(); ctx.arc(nx - 3, ny - 3, 4, 0, Math.PI * 2); ctx.fill();
+            }
+        });
+
+        // 5. Draw Mine Cart Cargo Item
+        let cx = cart.x * TILE_SIZE + 4, cy = cart.y * TILE_SIZE + 8;
+        ctx.fillStyle = "#4b4f59";
+        ctx.fillRect(cx, cy, 32, 22);
+        ctx.fillStyle = "#000";
+        ctx.beginPath(); ctx.arc(cx + 6, cy + 24, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx + 26, cy + 24, 5, 0, Math.PI * 2); ctx.fill();
+        if (coalCollected > 0) {
+            ctx.fillStyle = "#1c1b21";
+            ctx.beginPath(); ctx.ellipse(cx + 16, cy + 2, 12, 6, 0, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // 6. Draw Animated Player Character (White Silhouette Outline Style)
+        let px = player.x * TILE_SIZE + 10, py = player.y * TILE_SIZE + 4;
+        let pbounce = Math.sin(animTick) * 2;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath(); ctx.arc(px + 10, py + 8 + pbounce, 6, 0, Math.PI * 2); ctx.fill(); // Head
+        ctx.fillRect(px + 4, py + 15, 12, 18); // Suit
+        ctx.fillStyle = "#ffbb00"; // Miner Headlamp Flare Beam
+        ctx.fillRect(px + 6, py + 3 + pbounce, 8, 3);
+
+        // 7. Draw Animated Cobb Monster (Evolving Claws & Shifting Mouth Frame)
+        let mx = monster.x * TILE_SIZE, my = monster.y * TILE_SIZE;
+        let mshift = Math.sin(monster.animFrame) * 4;
+        ctx.fillStyle = "#9c1414";
+        ctx.beginPath(); ctx.ellipse(mx + 20, my + 18, 16, 18, 0, 0, Math.PI * 2); ctx.fill(); // Core Torso
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(mx + 8, my + 14 + mshift, 24, 6); // Jagged Teeth Jaw Line
+        ctx.fillStyle = "#000";
+        ctx.fillRect(mx + 12, my + 14 + mshift, 2, 6);
+        ctx.fillRect(mx + 19, my + 14 + mshift, 2, 6);
+        ctx.fillRect(mx + 26, my + 14 + mshift, 2, 6);
+        // Dynamic Reach Claws
+        ctx.strokeStyle = "#7a0c0c"; ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(mx + 4, my + 12); ctx.lineTo(mx - 6, my + 24 + mshift);
+        ctx.moveTo(mx + 36, my + 12); ctx.lineTo(mx + 46, my + 20 - mshift);
+        ctx.stroke();
+
+        // 8. 🔦 2D Flashlight Vignette Overlay Mask
+        let screenPx = player.x * TILE_SIZE + 20;
+        let screenPy = player.y * TILE_SIZE + 20;
+        let gradient = ctx.createRadialGradient(screenPx, screenPy, 30, screenPx, screenPy, 170);
+        gradient.addColorStop(0, "rgba(0,0,0,0)");
+        gradient.addColorStop(0.6, "rgba(3, 3, 6, 0.4)");
+        gradient.addColorStop(1, "rgba(3, 3, 6, 0.99)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        requestAnimationFrame(render);
+    }
+
+    // Boot up Game System Layouts
+    generateLevel();
+    requestAnimationFrame(render);
+</script>
+
+</body>
+</html>
