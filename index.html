@@ -3,327 +3,400 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>THE COAL PIT: REAL-TIME EVOLUTION</title>
+    <title>THE COAL PIT: CHOOSE YOUR PATH</title>
     <style>
+        :root {
+            --bg-color: #060608;
+            --panel-bg: #111116;
+            --border-color: #2a2a35;
+            --text-color: #d1d1d6;
+            --accent-color: #ff3b30;
+        }
         body {
-            background-color: #050508;
-            color: #d1d1d1;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             font-family: 'Courier New', Courier, monospace;
             margin: 0;
-            padding: 0;
+            padding: 20px;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            overflow: hidden;
         }
-        #ui-layer {
-            width: 800px;
+        #game-container {
+            width: 100%;
+            max-width: 700px;
+            background: var(--panel-bg);
+            border: 3px solid var(--border-color);
+            padding: 25px;
+            box-shadow: 0 0 35px rgba(0, 0, 0, 0.8);
+            border-radius: 4px;
+        }
+        #status-bar {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 16px;
+            background: #1a1a24;
+            padding: 10px 15px;
+            border: 1px solid #3a3a4a;
+            margin-bottom: 20px;
+            font-size: 13px;
             font-weight: bold;
-            text-shadow: 0px 2px 4px #000;
         }
-        #gameCanvas {
-            border: 4px solid #222125;
-            box-shadow: 0 0 35px rgba(200, 20, 20, 0.2);
-            background-color: #0a090d;
+        .stat span {
+            color: #fff;
         }
-        #msg-box {
-            margin-top: 12px;
-            font-size: 16px;
+        #canvas-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        #sceneCanvas {
+            background: #000;
+            border: 2px solid #222;
+            image-rendering: pixelated;
+        }
+        #story-text {
+            font-size: 15px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+            min-height: 80px;
+            border-left: 4px solid var(--accent-color);
+            padding-left: 15px;
+        }
+        #choices-box {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .choice-btn {
+            background: #1c1c24;
+            color: #fff;
+            border: 1px solid #444454;
+            padding: 14px 20px;
+            font-family: inherit;
+            font-size: 14px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-radius: 2px;
+        }
+        .choice-btn:hover {
+            background: var(--accent-color);
+            color: #000;
+            border-color: #fff;
             font-weight: bold;
-            color: #ff3333;
-            text-shadow: 0px 1px 3px #000;
-            height: 24px;
+        }
+        .danger-text {
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+        .success-text {
+            color: #34c759;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-<div id="ui-layer">
-    <div>DEPTH: <span id="ui-depth" style="color:#00ff66;">B1</span></div>
-    <div>COAL IN CART: <span id="ui-coal" style="color:#fff;">0 / 3</span></div>
-    <div>COBB MUTATION: <span id="ui-stage" style="color:#ffaa00;">Stage 0 (Blind)</span></div>
+<div id="game-container">
+    <div id="status-bar">
+        <div class="stat">DEPTH: <span id="stat-depth">B1</span></div>
+        <div class="stat">COAL LOADED: <span id="stat-coal">0 / 3</span></div>
+        <div class="stat">COBB MUTATION: <span id="stat-cobb" style="color: #ff9500;">Stage 0 (Blind)</span></div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="sceneCanvas" width="600" height="250"></canvas>
+    </div>
+
+    <div id="story-text">Loading survival protocols...</div>
+
+    <div id="choices-box"></div>
 </div>
 
-<canvas id="gameCanvas" width="800" height="600"></canvas>
-
-<div id="msg-box">USE WASD OR ARROWS. PUSH THE CART ONTO THE RED ELEVATOR AT THE RIGHT Edge!</div>
-
 <script>
-    const canvas = document.getElementById("gameCanvas");
+    const canvas = document.getElementById("sceneCanvas");
     const ctx = canvas.getContext("2d");
 
-    const TILE_SIZE = 40;
-    const COLS = 20;
-    const ROWS = 15;
+    // Game state tracking variables
+    let coalLoaded = 0;
+    let mutationStage = 0;
+    let animFrame = 0;
+    let currentScene = "start";
 
-    // Game Core State Variables
-    let currentLevel = 1;
-    let coalCollected = 0;
-    let coalNeeded = 3;
-    let gameOver = false;
-    
-    let player = { x: 2, y: 7 };
-    let cart = { x: 5, y: 7 };
-    let elevator = { x: 18, y: 7 };
-    
-    let monster = { x: 17, y: 2, stage: 0, animFrame: 0, lastMoveTime: 0, speedMs: 600 };
-    let coalNodes = [];
-    let grid = [];
-    let animTick = 0;
+    // Dynamic Pixel Art Scenes Data Store
+    const artAssets = {
+        background: (type) => {
+            ctx.fillStyle = "#0c0b11";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw stone textures
+            ctx.fillStyle = "#1e1d24";
+            for(let i=0; i<canvas.width; i+=40) {
+                ctx.fillRect(i, 0, 2, canvas.height);
+                ctx.fillRect(0, i/2, canvas.width, 2);
+            }
 
-    // Generate Layout Fixes
-    function generateLevel() {
-        coalCollected = 0;
-        monster.stage = Math.min(3, currentLevel - 1);
-        monster.speedMs = Math.max(180, 600 - (currentLevel * 90));
+            if (type === "tracks") {
+                // Main train rail tracks running through middle
+                ctx.fillStyle = "#53505a";
+                ctx.fillRect(0, 140, canvas.width, 6);
+                ctx.fillRect(0, 160, canvas.width, 6);
+                ctx.fillStyle = "#382e25";
+                for (let x = 0; x < canvas.width; x += 30) {
+                    ctx.fillRect(x, 130, 8, 42);
+                }
+            }
+        },
+        player: (x, y, holdingCoal=false) => {
+            let bounce = Math.sin(animFrame) * 3;
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath(); ctx.arc(x, y + bounce, 12, 0, Math.PI * 2); ctx.fill(); // Head
+            ctx.fillRect(x - 8, y + 12 + bounce, 16, 30); // Body torso
+            ctx.fillStyle = "#ffcc00";
+            ctx.fillRect(x, y + 2 + bounce, 12, 4); // Glowing Helmet Light Beam
+            
+            // Render flashlight beam field triangle effect
+            let grad = ctx.createLinearGradient(x+12, y+4+bounce, x+180, y+4+bounce);
+            grad.addColorStop(0, "rgba(255, 230, 130, 0.4)");
+            grad.addColorStop(1, "rgba(255, 230, 130, 0)");
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(x+12, y+4+bounce);
+            ctx.lineTo(x+180, y-40+bounce);
+            ctx.lineTo(x+180, y+50+bounce);
+            ctx.fill();
+
+            if (holdingCoal) {
+                ctx.fillStyle = "#16161a";
+                ctx.fillRect(x - 10, y - 22 + bounce, 20, 15);
+            }
+        },
+        cobb: (x, y, activeAggro=false) => {
+            let jawShift = Math.sin(animFrame * 1.5) * 6;
+            ctx.fillStyle = "#9c1414";
+            ctx.beginPath(); ctx.ellipse(x, y, 28, 32, 0, 0, Math.PI * 2); ctx.fill(); // Main heavy core frame
+
+            // Sharp dynamic white teeth rows
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(x - 20, y + jawShift, 40, 8);
+            ctx.fillStyle = "#000";
+            for(let i = -16; i <= 16; i += 8) {
+                ctx.fillRect(x + i, y + jawShift, 3, 8);
+            }
+
+            // Extended sweeping monster side claws
+            ctx.strokeStyle = "#7a0c0c";
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(x - 20, y - 10);
+            ctx.lineTo(x - 45, y + 15 + jawShift);
+            ctx.moveTo(x + 20, y - 10);
+            ctx.lineTo(x + 45, y + 5 - jawShift);
+            ctx.stroke();
+
+            // Aggressive stalking mutation adjustments
+            if (activeAggro) {
+                ctx.fillStyle = "#ff3b30";
+                ctx.beginPath(); ctx.arc(x - 12, y - 15, 4, 0, Math.PI*2); ctx.arc(x + 12, y - 15, 4, 0, Math.PI*2); ctx.fill();
+            }
+        },
+        cart: (x, y, fills=0) => {
+            ctx.fillStyle = "#4b4f59";
+            ctx.fillRect(x, y, 75, 40); // Base metal iron bin container
+            ctx.fillStyle = "#111";
+            ctx.beginPath(); ctx.arc(x + 15, y + 45, 10, 0, Math.PI*2); ctx.arc(x + 60, y + 45, 10, 0, Math.PI*2); ctx.fill(); // Wheels
+            if (fills > 0) {
+                ctx.fillStyle = "#16161a";
+                ctx.beginPath(); ctx.ellipse(x + 37, y + 2, 30, 15, 0, 0, Math.PI*2); ctx.fill(); // Stacked visual chunks
+            }
+        },
+        elevator: (x, y) => {
+            ctx.fillStyle = "#5c5b66";
+            ctx.fillRect(x, y, 70, 120);
+            ctx.fillStyle = "#3a1212";
+            for (let i = x + 8; i < x + 70; i += 14) {
+                ctx.fillRect(i, y, 4, 120); // Metal gates cage lines bars
+            }
+        },
+        coalNode: (x, y) => {
+            ctx.fillStyle = "#16161a";
+            ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = "#474952";
+            ctx.fillRect(x - 8, y - 8, 12, 12); // Raw shiny angles facets
+        }
+    };
+
+    // Story Node Scenario Mapping Configuration Script Engine
+    const storyNodes = {
+        start: {
+            text: "You stand deep inside Mine Depth B1 at the Elevator Hub station. The metal cage gate is rusted shut. To power the manual gears up, you must find 3 raw chunks of Coal scattered down the mining corridors, load them onto the iron Mine Cart, and push it back here.",
+            art: () => {
+                artAssets.background("tracks");
+                artAssets.elevator(50, 45);
+                artAssets.cart(160, 110, coalLoaded);
+                artAssets.player(290, 120, false);
+            },
+            choices: [
+                { text: "⛏️ Head Left down the Western Excavation Shaft", target: "west_shaft" },
+                { text: "⛏️ Head Right down the Dark Rail Maintenance Line", target: "east_line" }
+            ]
+        },
+        west_shaft: {
+            text: "You walk into a damp, crumbling tunnel. Your headlamp catches a massive chunk of shiny black carbon embedded in the rock walls. But from deep inside the tunnel pocket, you hear a wet, unsettling breathing sound. Something is shifting in the dark.",
+            art: () => {
+                artAssets.background("plain");
+                artAssets.coalNode(450, 130);
+                artAssets.player(150, 120, false);
+                if (mutationStage >= 1) artAssets.cobb(520, 120, true);
+            },
+            choices: [
+                { text: "💎 Swing your pickaxe to rapidly harvest the Coal Node", target: "mine_west" },
+                { text: "🏃 Turn around and sprint carefully back to the safe Elevator Hub", target: "start" }
+            ]
+        },
+        mine_west: {
+            text: "CLANG! Your pickaxe breaks off a solid heavy block of coal! The echo rings loudly across the cave. Suddenly, a terrible screech sounds out. Cobb has detected the noise and has mutated! He can now HEAR your locations.",
+            mutate: 1,
+            addCoal: 1,
+            art: () => {
+                artAssets.background("plain");
+                artAssets.player(180, 120, true);
+                artAssets.cobb(440, 120, true);
+            },
+            choices: [
+                { text: "🛒 Hurry back to the central Hub to drop this coal chunk inside the Cart", target: "deposit_hub" }
+            ]
+        },
+        east_line: {
+            text: "You step along the wooden railway cross-ties. The path branches deeper into a forgotten drainage cavity. Your foot kicks a loose rock into a pit. You see a raw node of coal ahead, but a chilling fog is rolling in fast. The air temperature is plummeting.",
+            art: () => {
+                artAssets.background("tracks");
+                artAssets.coalNode(480, 150);
+                artAssets.player(120, 120, false);
+            },
+            choices: [
+                { text: "💎 Grab the coal deposit immediately from the ground tracks", target: "mine_east" },
+                { text: "🏃 Retreat backwards into the main Elevator junction lane", target: "start" }
+            ]
+        },
+        mine_east: {
+            text: "You pull the jagged coal mass free. A freezing draft blows past. Remote bio-scans indicate Cobb has evolved to Stage 2: Scent Tracking. He can now track your historic footprints through the halls without noise updates!",
+            mutate: 2,
+            addCoal: 1,
+            art: () => {
+                artAssets.background("tracks");
+                artAssets.player(250, 120, true);
+                artAssets.cobb(500, 120, true);
+            },
+            choices: [
+                { text: "🛒 Run straight back to the Elevator Cart Hub to unload", target: "deposit_hub" }
+            ]
+        },
+        deposit_hub: {
+            text: "You rush back to the cart and heave the crushing block of coal inside. It slides in with a loud clatter. The engine counterweights hum faintly. You feel a rhythmic thumping vibration shaking the stone flooring under you... Cobb is actively moving through the map tunnels right now.",
+            art: () => {
+                artAssets.background("tracks");
+                artAssets.elevator(50, 45);
+                artAssets.cart(160, 110, coalLoaded);
+                artAssets.player(260, 120, false);
+            },
+            choices: [
+                { text: "Proceed to look for the next remaining deep fuel sources", target: "final_hunt" }
+            ]
+        },
+        final_hunt: {
+            text: "The mine is pitch black now. Only one final rich pocket of coal remains down the deep Southern drainage pit. But the red mutated silhouette of Cobb is standing right near the intersection pathway. You can see his giant sweeping arms tracking your movement arcs.",
+            art: () => {
+                artAssets.background("plain");
+                artAssets.player(100, 120, false);
+                artAssets.cobb(300, 120, true);
+                artAssets.coalNode(500, 130);
+            },
+            choices: [
+                { text: "🤫 Attempt to quietly sneak past Cobb's line of sight", target: "sneak_fail" },
+                { text: "🛒 Shove the Mine Cart forcefully directly down the tracks into him as a shield!", target: "win_scene" }
+            ]
+        },
+        sneak_fail: {
+            text: "<span class='danger-text'>💀 DEATH:</span> Because Cobb unlocked Scent Tracking earlier, your smell gives your position away instantly. The creature turns completely around in the dark, lunges across the rails with his jagged jaws, and drags you down into the bottomless pit.",
+            art: () => {
+                artAssets.background("plain");
+                artAssets.cobb(250, 120, true);
+            },
+            choices: [
+                { text: "🔄 System Failure. Click here to reboot your miner and retry.", target: "start_reset" }
+            ]
+        },
+        win_scene: {
+            text: "<span class='success-text'>🎉 ESCAPE SUCCESSFUL!</span> The heavy iron mine cart smashes right through the path, disorienting Cobb in the tight hallway! You dive onto the rail frame, ride the momentum straight into the cage, slam the iron bars shut, and pull the lever. The elevator pulls you up to safety! You beat the Pit!",
+            art: () => {
+                artAssets.background("tracks");
+                artAssets.elevator(50, 45);
+                artAssets.player(75, 120, false);
+                artAssets.cobb(450, 120, false);
+            },
+            choices: [
+                { text: "🎮 Play Again from Stage 1", target: "start_reset" }
+            ]
+        }
+    };
+
+    // Main Engine Controller Logic Router Function
+    function renderScene(sceneKey) {
+        if (sceneKey === "start_reset") {
+            coalLoaded = 0;
+            mutationStage = 0;
+            currentScene = "start";
+            sceneKey = "start";
+        }
+
+        currentScene = sceneKey;
+        const node = storyNodes[sceneKey];
+
+        // Process variable conditional checks
+        if (node.mutate) mutationStage = Math.max(mutationStage, node.mutate);
+        if (node.addCoal) {
+            coalLoaded += node.addCoal;
+            node.addCoal = 0; // Prevent farming single nodes on state returns
+        }
+
+        // Update Text Interface Elements
+        document.getElementById("stat-coal").innerText = `${coalLoaded} / 3`;
         
-        document.getElementById("ui-depth").innerText = `B${currentLevel}`;
-        document.getElementById("ui-coal").innerText = `0 / ${coalNeeded}`;
+        const stages = ["Stage 0 (Blind)", "Stage 1 (Hearing Unlocked)", "Stage 2 (Scent Tracking)", "Stage 3 (Absolute Hunter)"];
+        document.getElementById("stat-cobb").innerText = stages[mutationStage];
+        document.getElementById("story-text").innerHTML = node.text;
+
+        // Clear and rebuild choices block layout dynamically
+        const box = document.getElementById("choices-box");
+        box.innerHTML = "";
         
-        const stages = ["Stage 0 (Blind)", "Stage 1 (Weak Hunter)", "Stage 2 (Scent Tracking)", "Stage 3 (Stalker)"];
-        document.getElementById("ui-stage").innerText = stages[monster.stage];
-
-        // Re-carve completely safe baseline rows
-        grid = [];
-        for (let r = 0; r < ROWS; r++) {
-            let row = [];
-            for (let c = 0; c < COLS; c++) {
-                // Outer edges are structural walls
-                if (r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1) {
-                    row.push(1);
-                } else {
-                    row.push(0); // Open floor pathways
-                }
-            }
-            grid.push(row);
-        }
-
-        // Place custom walls to form clear mine shaft tunnels
-        for (let c = 1; c < COLS - 1; c++) {
-            if (c !== 7 && c !== 13) {
-                grid[4][c] = 1;
-                grid[10][c] = 1;
-            }
-        }
-
-        // Reset positions
-        player.x = 2; player.y = 7;
-        cart.x = 5; cart.y = 7;
-        monster.x = 17; monster.y = 2;
-
-        // Spread coal inside target corridors
-        coalNodes = [
-            { x: 3, y: 2, active: true },
-            { x: 10, y: 2, active: true },
-            { x: 10, y: 12, active: true }
-        ];
-    }
-
-    // Controls
-    window.addEventListener("keydown", (e) => {
-        if (gameOver) return;
-        let dx = 0, dy = 0;
-
-        if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") dy = -1;
-        if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") dy = 1;
-        if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") dx = -1;
-        if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") dx = 1;
-
-        if (dx !== 0 || dy !== 0) {
-            let nextPx = player.x + dx;
-            let nextPy = player.y + dy;
-
-            if (grid[nextPy][nextPx] === 0) {
-                // Cart physical push mapping check
-                if (nextPx === cart.x && nextPy === cart.y) {
-                    let nextCx = cart.x + dx;
-                    let nextCy = cart.y + dy;
-                    if (grid[nextCy][nextCx] === 0) {
-                        cart.x = nextCx;
-                        cart.y = nextCy;
-                        player.x = nextPx;
-                        player.y = nextPy;
-                    }
-                } else {
-                    player.x = nextPx;
-                    player.y = nextPy;
-                }
-
-                // Check mining collision steps
-                coalNodes.forEach(node => {
-                    if (node.active && player.x === node.x && player.y === node.y) {
-                        node.active = false;
-                        coalCollected++;
-                        document.getElementById("ui-coal").innerText = `${coalCollected} / ${coalNeeded}`;
-                    }
-                });
-            }
-        }
-    });
-
-    // Real-Time Ticking Engine Loop
-    function updateMonsterRealtime(timestamp) {
-        if (gameOver) return;
-
-        if (timestamp - monster.lastMoveTime > monster.speedMs) {
-            monster.lastMoveTime = timestamp;
-
-            let dx = Math.sign(player.x - monster.x);
-            let dy = Math.sign(player.y - monster.y);
-
-            if (monster.stage === 0) {
-                let moves = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}].filter(m => grid[monster.y + m.y][monster.x + m.x] === 0);
-                if (moves.length > 0) {
-                    let chosen = moves[Math.floor(Math.random() * moves.length)];
-                    dx = chosen.x; dy = chosen.y;
-                }
-            } else if (monster.stage === 1 && Math.random() < 0.35) {
-                let moves = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}].filter(m => grid[monster.y + m.y][monster.x + m.x] === 0);
-                if (moves.length > 0) {
-                    let chosen = moves[Math.floor(Math.random() * moves.length)];
-                    dx = chosen.x; dy = chosen.y;
-                }
-            }
-
-            if (grid[monster.y + dy][monster.x + dx] === 0) {
-                monster.x += dx;
-                monster.y += dy;
-            } else if (grid[monster.y][monster.x + dx] === 0) {
-                monster.x += dx;
-            } else if (grid[monster.y + dy][monster.x] === 0) {
-                monster.y += dy;
-            }
-        }
-
-        if (player.x === monster.x && player.y === monster.y) {
-            gameOver = true;
-            document.getElementById("msg-box").innerText = "💀 COBB CONSUMED YOU. REFRESH PAGE TO RESTART.";
-        }
-
-        if (cart.x === elevator.x && cart.y === elevator.y && coalCollected >= coalNeeded) {
-            currentLevel++;
-            generateLevel();
-        }
-    }
-
-    function render(timestamp) {
-        updateMonsterRealtime(timestamp);
-        
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        animTick += 0.15;
-        monster.animFrame = (monster.animFrame + 0.12) % 4;
-
-        // 1. Draw Mine Blocks
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                let x = c * TILE_SIZE;
-                let y = r * TILE_SIZE;
-
-                if (grid[r][c] === 1) {
-                    ctx.fillStyle = "#27252c";
-                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-                    ctx.strokeStyle = "#151418";
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
-                } else {
-                    ctx.fillStyle = "#121115";
-                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-                }
-            }
-        }
-
-        // 2. Draw Rail Lines running down central lane
-        let ry = 7 * TILE_SIZE;
-        ctx.strokeStyle = "#53505a";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, ry + 14); ctx.lineTo(canvas.width, ry + 14);
-        ctx.moveTo(0, ry + 26); ctx.lineTo(canvas.width, ry + 26);
-        ctx.stroke();
-        // Cross-ties blocks
-        ctx.strokeStyle = "#382e25";
-        ctx.lineWidth = 3;
-        for (let x = 0; x < canvas.width; x += 15) {
-            ctx.beginPath(); ctx.moveTo(x, ry + 8); ctx.lineTo(x, ry + 32); ctx.stroke();
-        }
-
-        // 3. Elevator Target Goal Node
-        let ex = elevator.x * TILE_SIZE, ey = elevator.y * TILE_SIZE;
-        ctx.fillStyle = "#8a1c1c";
-        ctx.fillRect(ex, ey, TILE_SIZE, TILE_SIZE);
-        ctx.fillStyle = "#333";
-        for (let i = ex + 4; i < ex + TILE_SIZE; i += 8) ctx.fillRect(i, ey, 2, TILE_SIZE);
-
-        // 4. Coal Nodes Items
-        coalNodes.forEach(node => {
-            if (node.active) {
-                let nx = node.x * TILE_SIZE + 20, ny = node.y * TILE_SIZE + 20;
-                ctx.fillStyle = "#1c1b21";
-                ctx.beginPath(); ctx.arc(nx, ny, 11, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = "#474952";
-                ctx.beginPath(); ctx.arc(nx - 3, ny - 3, 4, 0, Math.PI * 2); ctx.fill();
-            }
+        node.choices.forEach(c => {
+            const btn = document.createElement("button");
+            btn.className = "choice-btn";
+            btn.innerHTML = c.text;
+            btn.onclick = () => renderScene(c.target);
+            box.appendChild(btn);
         });
-
-        // 5. Mine Cart Body
-        let cx = cart.x * TILE_SIZE + 4, cy = cart.y * TILE_SIZE + 8;
-        ctx.fillStyle = "#4b4f59";
-        ctx.fillRect(cx, cy, 32, 22);
-        ctx.fillStyle = "#000";
-        ctx.beginPath(); ctx.arc(cx + 6, cy + 24, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(cx + 26, cy + 24, 5, 0, Math.PI * 2); ctx.fill();
-        if (coalCollected > 0) {
-            ctx.fillStyle = "#1c1b21";
-            ctx.beginPath(); ctx.ellipse(cx + 16, cy + 2, 12, 6, 0, 0, Math.PI * 2); ctx.fill();
-        }
-
-        // 6. Player White Outline Sprite
-        let px = player.x * TILE_SIZE + 10, py = player.y * TILE_SIZE + 4;
-        let pbounce = Math.sin(animTick) * 2;
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath(); ctx.arc(px + 10, py + 8 + pbounce, 6, 0, Math.PI * 2); ctx.fill(); 
-        ctx.fillRect(px + 4, py + 15, 12, 18); 
-        ctx.fillStyle = "#ffbb00"; 
-        ctx.fillRect(px + 6, py + 3 + pbounce, 8, 3);
-
-        // 7. Mutated Cobb Sprite Animation Logic
-        let mx = monster.x * TILE_SIZE, my = monster.y * TILE_SIZE;
-        let mshift = Math.sin(monster.animFrame) * 4;
-        ctx.fillStyle = "#9c1414";
-        ctx.beginPath(); ctx.ellipse(mx + 20, my + 18, 16, 18, 0, 0, Math.PI * 2); ctx.fill(); 
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(mx + 8, my + 14 + mshift, 24, 6); 
-        ctx.fillStyle = "#000";
-        ctx.fillRect(mx + 12, my + 14 + mshift, 2, 6);
-        ctx.fillRect(mx + 19, my + 14 + mshift, 2, 6);
-        ctx.fillRect(mx + 26, my + 14 + mshift, 2, 6);
-        ctx.strokeStyle = "#7a0c0c"; ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(mx + 4, my + 12); ctx.lineTo(mx - 6, my + 24 + mshift);
-        ctx.moveTo(mx + 36, my + 12); ctx.lineTo(mx + 46, my + 20 - mshift);
-        ctx.stroke();
-
-        // 8. Flashlight Mask layer Shader
-        let screenPx = player.x * TILE_SIZE + 20;
-        let screenPy = player.y * TILE_SIZE + 20;
-        let gradient = ctx.createRadialGradient(screenPx, screenPy, 30, screenPx, screenPy, 170);
-        gradient.addColorStop(0, "rgba(0,0,0,0)");
-        gradient.addColorStop(0.6, "rgba(3, 3, 6, 0.4)");
-        gradient.addColorStop(1, "rgba(3, 3, 6, 0.99)");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        requestAnimationFrame(render);
     }
 
-    generateLevel();
-    requestAnimationFrame(render);
+    // Hardware loop engine for smooth canvas object animations updates
+    function loop() {
+        animFrame += 0.08;
+        
+        // Fetch current active frame canvas draw function rules mapping
+        if (storyNodes[currentScene]) {
+            storyNodes[currentScene].art();
+        }
+
+        requestAnimationFrame(loop);
+    }
+
+    // Initial Engine Boot Sequencer
+    renderScene("start");
+    loop();
 </script>
 
 </body>
