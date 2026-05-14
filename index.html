@@ -52,7 +52,7 @@
 
 <canvas id="gameCanvas" width="800" height="600"></canvas>
 
-<div id="msg-box">COBB IS WALKING. PUSH THE CART TO THE ELEVATOR SHAFT!</div>
+<div id="msg-box">USE WASD OR ARROWS. PUSH THE CART ONTO THE RED ELEVATOR AT THE RIGHT Edge!</div>
 
 <script>
     const canvas = document.getElementById("gameCanvas");
@@ -69,15 +69,15 @@
     let gameOver = false;
     
     let player = { x: 2, y: 7 };
-    let cart = { x: 4, y: 7 };
-    let elevator = { x: 17, y: 7 };
+    let cart = { x: 5, y: 7 };
+    let elevator = { x: 18, y: 7 };
     
     let monster = { x: 17, y: 2, stage: 0, animFrame: 0, lastMoveTime: 0, speedMs: 600 };
     let coalNodes = [];
     let grid = [];
     let animTick = 0;
 
-    // Procedural Mine Generator (Creates straight rail lines and open coal pockets)
+    // Generate Layout Fixes
     function generateLevel() {
         coalCollected = 0;
         monster.stage = Math.min(3, currentLevel - 1);
@@ -86,22 +86,47 @@
         document.getElementById("ui-depth").innerText = `B${currentLevel}`;
         document.getElementById("ui-coal").innerText = `0 / ${coalNeeded}`;
         
-        // Update Stage Text
         const stages = ["Stage 0 (Blind)", "Stage 1 (Weak Hunter)", "Stage 2 (Scent Tracking)", "Stage 3 (Stalker)"];
         document.getElementById("ui-stage").innerText = stages[monster.stage];
 
-        // Fill map with rock walls (1)
-        grid = Array(ROWS).fill().map(() => Array(COLS).fill(1));
+        // Re-carve completely safe baseline rows
+        grid = [];
+        for (let r = 0; r < ROWS; r++) {
+            let row = [];
+            for (let c = 0; c < COLS; c++) {
+                // Outer edges are structural walls
+                if (r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1) {
+                    row.push(1);
+                } else {
+                    row.push(0); // Open floor pathways
+                }
+            }
+            grid.push(row);
+        }
 
-        // Carve linear horizontal tracks corridor
-        for (let x = 1; x < COLS - 1; x++) grid[7][x] = 0;
-        // Carve linear vertical utility lane
-        for (let y = 1; y < ROWS - 1; y++) grid[y][10] = 0;
+        // Place custom walls to form clear mine shaft tunnels
+        for (let c = 1; c < COLS - 1; c++) {
+            if (c !== 7 && c !== 13) {
+                grid[4][c] = 1;
+                grid[10][c] = 1;
+            }
+        }
 
-        // Carve distinct wide mining chambers (Pockets)
-        const pockets = [{x:2, y:2}, {x:17, y:2}, {x:2, y:12}, {x:17, y:12}];
-        pockets.forEach(p => {
-            for (let dy = -1; dy  {
+        // Reset positions
+        player.x = 2; player.y = 7;
+        cart.x = 5; cart.y = 7;
+        monster.x = 17; monster.y = 2;
+
+        // Spread coal inside target corridors
+        coalNodes = [
+            { x: 3, y: 2, active: true },
+            { x: 10, y: 2, active: true },
+            { x: 10, y: 12, active: true }
+        ];
+    }
+
+    // Controls
+    window.addEventListener("keydown", (e) => {
         if (gameOver) return;
         let dx = 0, dy = 0;
 
@@ -115,11 +140,10 @@
             let nextPy = player.y + dy;
 
             if (grid[nextPy][nextPx] === 0) {
-                // Mine Cart Pushing Physics Engine Check
+                // Cart physical push mapping check
                 if (nextPx === cart.x && nextPy === cart.y) {
                     let nextCx = cart.x + dx;
                     let nextCy = cart.y + dy;
-                    // Cart moves forward along open paths
                     if (grid[nextCy][nextCx] === 0) {
                         cart.x = nextCx;
                         cart.y = nextCy;
@@ -131,7 +155,7 @@
                     player.y = nextPy;
                 }
 
-                // Check for coal mining hits
+                // Check mining collision steps
                 coalNodes.forEach(node => {
                     if (node.active && player.x === node.x && player.y === node.y) {
                         node.active = false;
@@ -143,7 +167,7 @@
         }
     });
 
-    // ⏱️ Independent Real-Time Monster AI Loop Execution
+    // Real-Time Ticking Engine Loop
     function updateMonsterRealtime(timestamp) {
         if (gameOver) return;
 
@@ -154,14 +178,12 @@
             let dy = Math.sign(player.y - monster.y);
 
             if (monster.stage === 0) {
-                // Stage 0: Blindly picking random card slots
                 let moves = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}].filter(m => grid[monster.y + m.y][monster.x + m.x] === 0);
                 if (moves.length > 0) {
                     let chosen = moves[Math.floor(Math.random() * moves.length)];
                     dx = chosen.x; dy = chosen.y;
                 }
-            } else if (monster.stage === 1 && Math.random() < 0.4) {
-                // Stage 1: Weak tracking. 40% drift mistake rate.
+            } else if (monster.stage === 1 && Math.random() < 0.35) {
                 let moves = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}].filter(m => grid[monster.y + m.y][monster.x + m.x] === 0);
                 if (moves.length > 0) {
                     let chosen = moves[Math.floor(Math.random() * moves.length)];
@@ -169,7 +191,6 @@
                 }
             }
 
-            // Move block checking execution
             if (grid[monster.y + dy][monster.x + dx] === 0) {
                 monster.x += dx;
                 monster.y += dy;
@@ -180,20 +201,17 @@
             }
         }
 
-        // Kill check
         if (player.x === monster.x && player.y === monster.y) {
             gameOver = true;
-            document.getElementById("msg-box").innerText = "💀 COBB CONSUMED YOU. REFRESH PAGE TO RESTART THE ENGINES.";
+            document.getElementById("msg-box").innerText = "💀 COBB CONSUMED YOU. REFRESH PAGE TO RESTART.";
         }
 
-        // Check if level conditions are fully cleared
         if (cart.x === elevator.x && cart.y === elevator.y && coalCollected >= coalNeeded) {
             currentLevel++;
             generateLevel();
         }
     }
 
-    // Continuous Frame Render Engine Loop
     function render(timestamp) {
         updateMonsterRealtime(timestamp);
         
@@ -201,7 +219,7 @@
         animTick += 0.15;
         monster.animFrame = (monster.animFrame + 0.12) % 4;
 
-        // 1. Draw Mine Map Elements
+        // 1. Draw Mine Blocks
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 let x = c * TILE_SIZE;
@@ -220,31 +238,29 @@
             }
         }
 
-        // 2. Draw Railway Tracks Line Overlays
-        for (let x = TILE_SIZE; x < canvas.width - TILE_SIZE; x += TILE_SIZE) {
-            let ry = 7 * TILE_SIZE;
-            ctx.strokeStyle = "#53505a";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x, ry + 14); ctx.lineTo(x + TILE_SIZE, ry + 14);
-            ctx.moveTo(x, ry + 26); ctx.lineTo(x + TILE_SIZE, ry + 26);
-            ctx.stroke();
-            // Ties
-            ctx.strokeStyle = "#382e25";
-            ctx.lineWidth = 3;
-            for (let i = 0; i < TILE_SIZE; i += 10) {
-                ctx.beginPath(); ctx.moveTo(x + i, ry + 8); ctx.lineTo(x + i, ry + 32); ctx.stroke();
-            }
+        // 2. Draw Rail Lines running down central lane
+        let ry = 7 * TILE_SIZE;
+        ctx.strokeStyle = "#53505a";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, ry + 14); ctx.lineTo(canvas.width, ry + 14);
+        ctx.moveTo(0, ry + 26); ctx.lineTo(canvas.width, ry + 26);
+        ctx.stroke();
+        // Cross-ties blocks
+        ctx.strokeStyle = "#382e25";
+        ctx.lineWidth = 3;
+        for (let x = 0; x < canvas.width; x += 15) {
+            ctx.beginPath(); ctx.moveTo(x, ry + 8); ctx.lineTo(x, ry + 32); ctx.stroke();
         }
 
-        // 3. Draw Elevator Exit Door Frame
+        // 3. Elevator Target Goal Node
         let ex = elevator.x * TILE_SIZE, ey = elevator.y * TILE_SIZE;
-        ctx.fillStyle = "#5c5b66";
-        ctx.fillRect(ex, ey, TILE_SIZE, TILE_SIZE);
         ctx.fillStyle = "#8a1c1c";
-        for (let i = 4; i < TILE_SIZE; i += 8) ctx.fillRect(ex + i, ey, 2, TILE_SIZE);
+        ctx.fillRect(ex, ey, TILE_SIZE, TILE_SIZE);
+        ctx.fillStyle = "#333";
+        for (let i = ex + 4; i < ex + TILE_SIZE; i += 8) ctx.fillRect(i, ey, 2, TILE_SIZE);
 
-        // 4. Draw Active Carbon Coal Nodes
+        // 4. Coal Nodes Items
         coalNodes.forEach(node => {
             if (node.active) {
                 let nx = node.x * TILE_SIZE + 20, ny = node.y * TILE_SIZE + 20;
@@ -255,7 +271,7 @@
             }
         });
 
-        // 5. Draw Mine Cart Cargo Item
+        // 5. Mine Cart Body
         let cx = cart.x * TILE_SIZE + 4, cy = cart.y * TILE_SIZE + 8;
         ctx.fillStyle = "#4b4f59";
         ctx.fillRect(cx, cy, 32, 22);
@@ -267,34 +283,33 @@
             ctx.beginPath(); ctx.ellipse(cx + 16, cy + 2, 12, 6, 0, 0, Math.PI * 2); ctx.fill();
         }
 
-        // 6. Draw Animated Player Character (White Silhouette Outline Style)
+        // 6. Player White Outline Sprite
         let px = player.x * TILE_SIZE + 10, py = player.y * TILE_SIZE + 4;
         let pbounce = Math.sin(animTick) * 2;
         ctx.fillStyle = "#ffffff";
-        ctx.beginPath(); ctx.arc(px + 10, py + 8 + pbounce, 6, 0, Math.PI * 2); ctx.fill(); // Head
-        ctx.fillRect(px + 4, py + 15, 12, 18); // Suit
-        ctx.fillStyle = "#ffbb00"; // Miner Headlamp Flare Beam
+        ctx.beginPath(); ctx.arc(px + 10, py + 8 + pbounce, 6, 0, Math.PI * 2); ctx.fill(); 
+        ctx.fillRect(px + 4, py + 15, 12, 18); 
+        ctx.fillStyle = "#ffbb00"; 
         ctx.fillRect(px + 6, py + 3 + pbounce, 8, 3);
 
-        // 7. Draw Animated Cobb Monster (Evolving Claws & Shifting Mouth Frame)
+        // 7. Mutated Cobb Sprite Animation Logic
         let mx = monster.x * TILE_SIZE, my = monster.y * TILE_SIZE;
         let mshift = Math.sin(monster.animFrame) * 4;
         ctx.fillStyle = "#9c1414";
-        ctx.beginPath(); ctx.ellipse(mx + 20, my + 18, 16, 18, 0, 0, Math.PI * 2); ctx.fill(); // Core Torso
+        ctx.beginPath(); ctx.ellipse(mx + 20, my + 18, 16, 18, 0, 0, Math.PI * 2); ctx.fill(); 
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(mx + 8, my + 14 + mshift, 24, 6); // Jagged Teeth Jaw Line
+        ctx.fillRect(mx + 8, my + 14 + mshift, 24, 6); 
         ctx.fillStyle = "#000";
         ctx.fillRect(mx + 12, my + 14 + mshift, 2, 6);
         ctx.fillRect(mx + 19, my + 14 + mshift, 2, 6);
         ctx.fillRect(mx + 26, my + 14 + mshift, 2, 6);
-        // Dynamic Reach Claws
         ctx.strokeStyle = "#7a0c0c"; ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.moveTo(mx + 4, my + 12); ctx.lineTo(mx - 6, my + 24 + mshift);
         ctx.moveTo(mx + 36, my + 12); ctx.lineTo(mx + 46, my + 20 - mshift);
         ctx.stroke();
 
-        // 8. 🔦 2D Flashlight Vignette Overlay Mask
+        // 8. Flashlight Mask layer Shader
         let screenPx = player.x * TILE_SIZE + 20;
         let screenPy = player.y * TILE_SIZE + 20;
         let gradient = ctx.createRadialGradient(screenPx, screenPy, 30, screenPx, screenPy, 170);
@@ -307,7 +322,6 @@
         requestAnimationFrame(render);
     }
 
-    // Boot up Game System Layouts
     generateLevel();
     requestAnimationFrame(render);
 </script>
