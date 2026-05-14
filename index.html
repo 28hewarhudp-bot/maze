@@ -1,69 +1,273 @@
-import pygame
-import random
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE COAL PIT: EVOLUTION</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-color: #d1d1d1;
+            --accent-color: #ff3333;
+            --panel-bg: #121212;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            user-select: none;
+        }
+        #game-container {
+            width: 100%;
+            max-width: 750px;
+            background: var(--panel-bg);
+            border: 2px solid #333;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        header {
+            border-bottom: 2px dashed #444;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: var(--accent-color);
+            margin: 0 0 5px 0;
+            font-size: 24px;
+            letter-spacing: 2px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            background: #1a1a1a;
+            padding: 10px;
+            border: 1px solid #333;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .stat-line span {
+            color: #fff;
+            font-weight: bold;
+        }
+        #log-window {
+            height: 220px;
+            overflow-y: auto;
+            background: #0a0a0a;
+            border: 1px solid #222;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .log-entry {
+            margin-bottom: 8px;
+            border-left: 3px solid #555;
+            padding-left: 8px;
+        }
+        .log-entry.system { border-color: #00aaee; color: #00aaee; }
+        .log-entry.danger { border-color: var(--accent-color); color: var(--accent-color); font-weight: bold; }
+        .log-entry.success { border-color: #00ff66; color: #00ff66; }
+        #controls {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        button {
+            background: #222;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 12px;
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+        button:hover:not(:disabled) {
+            background: var(--accent-color);
+            color: #000;
+            border-color: #fff;
+            font-weight: bold;
+        }
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .mutation-tag {
+            color: #ffaa00 !important;
+        }
+    </style>
+</head>
+<body>
 
-# Initialize Pygame
-pygame.init()
-WIDTH, HEIGHT = 800, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("8-Bit FNAF 4 Fan Game")
-clock = pygame.time.Clock()
+<div id="game-container">
+    <header>
+        <h1>SUB-LEVEL 4: MINESHAFTS</h1>
+        <p style="margin:5px 0 0 0; font-size:12px; color:#777;">Avoid the evolving entity. Deliver coal. Escape.</p>
+    </header>
 
-# Colors & Game States
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-rooms = ["BEDROOM", "LEFT_HALL", "RIGHT_HALL", "CLOSET"]
-current_room = "BEDROOM"
+    <div class="stats-grid">
+        <div class="stat-line">Location: <span id="stat-loc">Elevator Hub</span></div>
+        <div class="stat-line">Inventory: <span id="stat-inv">Empty</span></div>
+        <div class="stat-line">Cart Status: <span id="stat-cart">0 / 3 Coal Loaded</span></div>
+        <div class="stat-line">Monster Status: <span id="stat-monster" class="mutation-tag">Stage 0 (Blind)</span></div>
+        <div class="stat-line">Battery Life: <span id="stat-battery">100%</span></div>
+        <div class="stat-line">Mine Temperature: <span id="stat-temp">19°C</span></div>
+    </div>
 
-# Monster Variables
-monster_pos = 0  # 0: Far, 5: At Door (Jumpscare)
-monster_timer = pygame.USEREVENT + 1
-pygame.time.set_timer(monster_timer, 5000) # Monster moves every 5 seconds
+    <div id="log-window"></div>
 
-running = True
-while running:
-    # 1. Input Handling
-    keys = pygame.key.get_pressed()
-    flashlight = keys[pygame.K_f]   # Flashlight (F)
-    door_held = keys[pygame.K_SPACE] # Close Door (Space)
+    <div id="controls">
+        <button id="btn-n" onclick="move('North')">↑ Move North (Deep Excavation)</button>
+        <button id="btn-e" onclick="move('East')">→ Move East (Drainage Shaft)</button>
+        <button id="btn-s" onclick="move('South')">↓ Move South (Storage Depot)</button>
+        <button id="btn-w" onclick="move">← Move West (Elevator Hub)</button>
+        <button id="btn-action" onclick="performAction()">⛏️ Search / Mine Area</button>
+        <button id="btn-cart" onclick="interactCart()">🛒 Interact with Cart</button>
+    </div>
+</div>
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+<script>
+    // Game state variables
+    let playerLocation = "Hub"; 
+    let inventory = null; // Can hold "Coal"
+    let cartCoalCount = 0;
+    let monsterStage = 0;
+    let battery = 100;
+    let temperature = 19;
+    let isGameOver = false;
+
+    // Map configuration: item availability and monster locations
+    // Monster positions are numbers 0-3 corresponding to Hub, North, East, South
+    const rooms = ["Hub", "North", "East", "South"];
+    let monsterRoomIndex = 1; // Starts in North
+    let coalAvailable = { "North": true, "East": true, "South": true };
+
+    const logWin = document.getElementById("log-window");
+
+    // Initialize game
+    function initGame() {
+        logMessage("SYSTEM: Power grid online. Elevator is locked until 3 Coal loads are secured in the cart.", "system");
+        logMessage("You stand at the Elevator Hub. The tunnels branching off are dead silent.", "normal");
+        updateUI();
+    }
+
+    function logMessage(text, type = "normal") {
+        const entry = document.createElement("div");
+        entry.className = `log-entry ${type}`;
+        entry.innerText = text;
+        logWin.appendChild(entry);
+        logWin.scrollTop = logWin.scrollHeight;
+    }
+
+    function updateUI() {
+        document.getElementById("stat-loc").innerText = playerLocation === "Hub" ? "Elevator Hub" : playerLocation + " Tunnel";
+        document.getElementById("stat-inv").innerText = inventory ? inventory : "Empty";
+        document.getElementById("stat-cart").innerText = `${cartCoalCount} / 3 Coal Loaded`;
+        document.getElementById("stat-battery").innerText = `${battery}%`;
+        document.getElementById("stat-temp").innerText = `${temperature}°C`;
+
+        // Monster stage text
+        const monsterTxt = document.getElementById("stat-monster");
+        if (monsterStage === 0) monsterTxt.innerText = "Stage 0 (Blind)";
+        else if (monsterStage === 1) monsterTxt.innerText = "Stage 1 (Hearing Unlocked)";
+        else if (monsterStage === 2) monsterTxt.innerText = "Stage 2 (Scent Tracking)";
+        else monsterTxt.innerText = "Stage 3 (Absolute Hunter)";
+
+        // Configure action button text contextually
+        const actBtn = document.getElementById("btn-action");
+        if (coalAvailable[playerLocation]) {
+            actBtn.innerText = "⛏️ Mine Coal Deposit";
+            actBtn.disabled = false;
+        } else {
+            actBtn.innerText = "⛏️ Search Area (Empty)";
+            actBtn.disabled = true;
+        }
+        if (playerLocation === "Hub") {
+            actBtn.innerText = "🔧 Inspect Elevator Controls";
+            actBtn.disabled = false;
+        }
+
+        // Cart interaction button visibility
+        const cartBtn = document.getElementById("btn-cart");
+        if (playerLocation === "Hub") {
+            cartBtn.style.display = "block";
+            cartBtn.innerText = inventory === "Coal" ? "🛒 Deposit Coal into Cart" : (cartCoalCount === 3 ? "🚀 Pull Elevator Lever to Escape!" : "🛒 Check Mine Cart");
+        } else {
+            cartBtn.style.display = "none";
+        }
+
+        // Disable core movement targets matching current room
+        document.getElementById("btn-w").disabled = (playerLocation === "Hub") || isGameOver;
+        document.getElementById("btn-n").disabled = (playerLocation === "North") || isGameOver;
+        document.getElementById("btn-e").disabled = (playerLocation === "East") || isGameOver;
+        document.getElementById("btn-s").disabled = (playerLocation === "South") || isGameOver;
         
-        # Room Navigation (WASD)
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_a: current_room = "LEFT_HALL"
-            if event.key == pygame.K_d: current_room = "RIGHT_HALL"
-            if event.key == pygame.K_w: current_room = "CLOSET"
-            if event.key == pygame.K_s: current_room = "BEDROOM"
+        if (isGameOver) {
+            actBtn.disabled = true;
+            cartBtn.disabled = true;
+        }
+    }
 
-        # Monster AI Logic
-        if event.type == monster_timer:
-            if not (current_room == "LEFT_HALL" and door_held):
-                monster_pos += 1
-            if monster_pos >= 5:
-                print("JUMPSCARE! Game Over.")
-                running = False
+    function move(direction) {
+        if (isGameOver) return;
+        playerLocation = direction;
+        logMessage(`You walk carefully into the ${direction === 'Hub' ? 'Elevator Hub' : direction + ' Tunnel'}.`);
+        
+        battery = Math.max(0, battery - 4);
+        gameTick(false); // standard movement tick
+    }
 
-    # 2. Rendering
-    screen.fill(BLACK)
-    
-    # Draw Background (Placeholder text for your 8-bit sprites)
-    font = pygame.font.SysFont("arial", 32)
-    room_text = font.render(f"Location: {current_room}", True, WHITE)
-    screen.blit(room_text, (20, 20))
+    function performAction() {
+        if (isGameOver) return;
 
-    if flashlight:
-        pygame.draw.circle(screen, (255, 255, 200), (WIDTH//2, HEIGHT//2), 200) # Light effect
-        if current_room == "LEFT_HALL" and monster_pos > 0:
-            # If monster is flashed in hall, it retreats
-            monster_pos = 0
-            print("Monster retreated!")
+        if (playerLocation === "Hub") {
+            if (cartCoalCount = 2) {
+            // Sniffs out tracks: 75% chance to move directly toward the player's room regardless of noise
+            if (Math.random() < 0.75) {
+                targetRoomIndex = rooms.indexOf(playerLocation);
+                logMessage("A deep, sickening breathing sound echoes closer. It knows your scent.", "danger");
+            } else {
+                targetRoomIndex = Math.floor(Math.random() * rooms.length);
+            }
+        }
 
-    if door_held and (current_room == "LEFT_HALL" or current_room == "RIGHT_HALL"):
-        pygame.draw.rect(screen, (50, 50, 50), (100, 50, 600, 500)) # Door visual
+        monsterRoomIndex = targetRoomIndex;
+        let monsterNewRoom = rooms[monsterRoomIndex];
 
-    pygame.display.flip()
-    clock.tick(60)
+        // 2. Proximity Warnings
+        if (monsterNewRoom === playerLocation) {
+            // Caught check
+            isGameOver = true;
+            logMessage("💀 DEATH: A mutated silhouette emerges instantly from the shadow behind you. Before you can look back, you are dragged away into the darkness...", "danger");
+            updateUI();
+            return;
+        } else {
+            // Nearby ambient warning indicators
+            if ((playerLocation === "Hub" && monsterNewRoom !== "Hub") || (playerLocation !== "Hub" && monsterNewRoom === "Hub")) {
+                logMessage("Your flashlight flickers mildly. Something cold is in the adjacent tunnel corridor...");
+            }
+        }
 
-pygame.quit()
+        if (battery <= 0) {
+            isGameOver = true;
+            logMessage("💀 DEAD BATTERY: Your flashlight dies. Left in total pitching darkness without bearings, the creature finds you instantly.", "danger");
+        }
+
+        updateUI();
+    }
+
+    // Launch game on load
+    window.onload = initGame;
+</script>
+
+</body>
+</html>
